@@ -1,11 +1,13 @@
 -module(http_client).
 -export([http_connect/1]).
 
+-define(TIMEOUT, 30 * 1000).
+
 
 http_connect(Host) ->
     {ok, Sock} = gen_tcp:connect(Host, 80,
-        [binary, inet, {packet, http_bin}, {send_timeout, 10 * 1000},
-        {send_timeout_close, true}, {active, false}], 10 * 1000),
+        [binary, inet, {packet, http_bin}, {send_timeout, ?TIMEOUT},
+        {send_timeout_close, true}, {active, false}], ?TIMEOUT),
     Request = get_http_request(<<"GET">>, <<"/">>, <<"1.1">>,
         [{<<"HOST">>, list_to_binary(Host)}]),
     ok = gen_tcp:send(Sock, Request),
@@ -32,7 +34,7 @@ recv(Sock) ->
     {Status, Headers, recv_data(Sock, Size, <<>>)}.
 
 recv_headers(Sock, HTTPHeader, Headers, Size) ->
-    case gen_tcp:recv(Sock, 0, 10 * 1000) of
+    case gen_tcp:recv(Sock, 0, ?TIMEOUT) of
         {ok, {http_response, Version, Status, Comment}} ->
             recv_headers(Sock, {Version, Status, Comment}, Headers, Size);
         {ok, {http_header, _, 'Content-Length', _, Value}} ->
