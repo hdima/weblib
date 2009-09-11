@@ -1,0 +1,8 @@
+@author Dmitry Vasiliev <dima@hlabs.spb.ru>
+@version 0.1
+@title HTTPLib - HTTP library
+@doc Main modules:
+<ul>
+  <li><a href="http_client.html">http_client</a></li>
+</ul>
+@end
