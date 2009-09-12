@@ -26,7 +26,7 @@
 %%          Chunk = binary()
 %%
 %%      stop(Info, State)
-%%          Info = {stop, Reason} | {error, Reason}
+%%          Info = ok | {stop, Reason} | {error, Reason}
 %%
 -module(http_client).
 -vsn(0.1).
@@ -181,7 +181,7 @@ recv_headers(Sock, HTTPHeader, Headers, Size) ->
     end.
 
 recv_data(_Sock, 0, Behaviour, State) ->
-    Behaviour:handle_data(eof, State);
+    Behaviour:stop(ok, State);
 recv_data(Sock, Size, Behaviour, State) ->
     case gen_tcp:recv(Sock, 0, 20 * 1000) of
         {ok, Batch} ->
