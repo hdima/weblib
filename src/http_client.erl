@@ -25,6 +25,7 @@ behaviour_info(callbacks) ->
 behaviour_info(_Other) ->
     undefined.
 
+
 %%
 %% @doc Start HTTP client with callback module
 %% @spec start(Module, Args) -> ok
