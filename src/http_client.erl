@@ -25,7 +25,7 @@
 %%      handle_data(Chunk, State) -> NewState
 %%          Chunk = binary()
 %%
-%%      stop(Info, State)
+%%      end_request(Info, State)
 %%          Info = ok | {stop, Reason} | {error, Reason}
 %%
 -module(http_client).
@@ -46,7 +46,7 @@
 %% @doc Behaviour callbacks
 %%
 behaviour_info(callbacks) ->
-    [{prepare_request, 2}, {stop, 2},
+    [{prepare_request, 2}, {end_request, 2},
         {handle_headers, 3}, {handle_data, 2}];
 behaviour_info(_Other) ->
     undefined.
@@ -72,9 +72,9 @@ http_connect(Url, Behaviour, Args) ->
                 {ok, U, Headers, State} ->
                     http_connect(U, Headers, Behaviour, State);
                 {stop, Reason, State} ->
-                    Behaviour:stop({stop, Reason}, State);
+                    Behaviour:end_request({stop, Reason}, State);
                 {error, Reason, State} ->
-                    Behaviour:stop({error, Reason}, State)
+                    Behaviour:end_request({error, Reason}, State)
             end
     end.
 
@@ -97,10 +97,10 @@ http_connect({http, Host, Port, Path}, Headers, Behaviour, State) ->
                     gen_tcp:close(Sock),
                     Result;
                 Other ->
-                    Behaviour:stop(Other, State)
+                    Behaviour:end_request(Other, State)
             end;
         Other ->
-            Behaviour:stop(Other, State)
+            Behaviour:end_request(Other, State)
     end.
 
 
@@ -161,7 +161,7 @@ recv_response(Sock, Behaviour, State) ->
             inet:setopts(Sock, [{packet, raw}]),
             recv_data(Sock, Size, Behaviour, NewState);
         Other ->
-            Behaviour:stop(Other, State)
+            Behaviour:end_request(Other, State)
     end.
 
 recv_headers(Sock, HTTPHeader, Headers, Size) ->
@@ -181,12 +181,12 @@ recv_headers(Sock, HTTPHeader, Headers, Size) ->
     end.
 
 recv_data(_Sock, 0, Behaviour, State) ->
-    Behaviour:stop(ok, State);
+    Behaviour:end_request(ok, State);
 recv_data(Sock, Size, Behaviour, State) ->
     case gen_tcp:recv(Sock, 0, 20 * 1000) of
         {ok, Batch} ->
             NewState = Behaviour:handle_data(Batch, State),
             recv_data(Sock, Size - size(Batch), Behaviour, NewState);
         Other ->
-            Behaviour:stop(Other, State)
+            Behaviour:end_request(Other, State)
     end.
