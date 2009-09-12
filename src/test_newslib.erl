@@ -1,7 +1,7 @@
 %%
 %% @doc Library tests
 %%
--module(test_httplib).
+-module(test_newslib).
 -export([test/0, generate_docs/0]).
 
 
@@ -16,4 +16,4 @@ test() ->
 %% @doc Generate documentation
 %%
 generate_docs() ->
-    edoc:application(httplib, "src", []).
+    edoc:application(newslib, "src", []).

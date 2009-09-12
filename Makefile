@@ -6,10 +6,10 @@ ebin/%.beam: src/%.erl
 	erlc -Wall -pa ebin -o ebin/ $<
 
 test: compile
-	erl -noshell -pa ebin -s test_httplib test -s init stop
+	erl -noshell -pa ebin -s test_newslib test -s init stop
 
-doc: compile
-	erl -noshell -pa ebin -s test_httplib generate_docs -s init stop
+docs: compile
+	erl -noshell -pa ebin -s test_newslib generate_docs -s init stop
 
 clean:
 	rm -f ebin/*.beam erl_crash.dump \
