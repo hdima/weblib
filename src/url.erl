@@ -19,9 +19,9 @@
 %%      Result = {ok, Parts} | {error, url} | {error, scheme} | {error, port}
 %%      Parts = {Scheme, NetLoc, Port, Path}
 %%      Scheme = http | https
-%%      NetLoc = binary()
+%%      NetLoc = string()
 %%      Port = integer()
-%%      Path = binary()
+%%      Path = string()
 %%
 urlsplit(Url) ->
     case re:run(Url, ?URL, [{capture, all_but_first, list}]) of
@@ -34,8 +34,8 @@ urlsplit(Url) ->
                         unknown ->
                             {error, port};
                         PortNum ->
-                            {ok, {SchemeTok, list_to_binary(NetLoc),
-                                PortNum, list_to_binary(Path)}}
+                            {ok, {SchemeTok, NetLoc,
+                                PortNum, get_path(Path)}}
                     end
             end;
         _Other ->
@@ -65,3 +65,11 @@ parse_port(Port, _Scheme) when length(Port) > 0 ->
     list_to_integer(Port);
 parse_port(_, _) ->
     unknown.
+
+%%
+%% @doc Normalize path
+%%
+get_path("") ->
+    "/";
+get_path(Path) ->
+    Path.

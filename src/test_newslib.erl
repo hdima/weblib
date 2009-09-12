@@ -10,7 +10,8 @@
 %%
 test() ->
     test([
-        test_url
+        test_url,
+        test_http_client
     ]).
 
 test([Module | Modules]) ->

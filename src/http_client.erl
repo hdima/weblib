@@ -13,7 +13,7 @@
 %%          Port = integer()
 %%          Path = binary()
 %%          Args = list()
-%%          Result = {ok, UrlParts, Headers, Behaviour, State}
+%%          Result = {ok, UrlParts, Headers, State}
 %%              | {stop, Reason, State} | {error, Reason, State}
 %%
 %%      handle_headers(Status, Headers, State) -> NewState
@@ -112,7 +112,7 @@ http_connect({http, Host, Port, Path}, Headers, Behaviour, State) ->
 %%
 %% TODO: Add User-Agent
 %%
-http_headers([{'HOST', Host} | Headers], Host, Collected) ->
+http_headers([{'Host', Host} | Headers], _, Collected) ->
     http_headers(Headers, seen, [{<<"HOST">>, Host} | Collected]);
 http_headers([{Key, Value} | Headers], Host, Collected) ->
     http_headers(Headers, Host,
@@ -120,7 +120,7 @@ http_headers([{Key, Value} | Headers], Host, Collected) ->
 http_headers([], seen, Collected) ->
     Collected;
 http_headers([], Host, Collected) ->
-    http_headers([], seen, [{<<"HOST">>, Host} | Collected]).
+    http_headers([], seen, [{<<"HOST">>, list_to_binary(Host)} | Collected]).
 
 
 %%
@@ -135,7 +135,8 @@ http_headers([], Host, Collected) ->
 %% TODO: 'POST', 'HEAD' and maybe other methods?
 %%
 http_request('GET', Path, Headers) ->
-    Header = <<"GET ",Path/binary," HTTP/1.0\r\n">>,
+    P = list_to_binary(Path),
+    Header = <<"GET ",P/binary," HTTP/1.0\r\n">>,
     HeadersData = format_headers(Headers, <<>>),
     <<Header/binary,HeadersData/binary,"\r\n">>.
 
@@ -175,7 +176,8 @@ recv_headers(Sock, HTTPHeader, Headers, Size) ->
         {ok, {http_header, _, Name, _, Value}} ->
             recv_headers(Sock, HTTPHeader, [{Name, Value} | Headers], Size);
         {ok, http_eoh} ->
-            {HTTPHeader, lists:reverse(Headers), Size};
+            {ok, HTTPHeader, lists:reverse(Headers), Size};
+        % TODO: Handle HTTP errors
         Other ->
             Other
     end.
@@ -183,7 +185,7 @@ recv_headers(Sock, HTTPHeader, Headers, Size) ->
 recv_data(_Sock, 0, Behaviour, State) ->
     Behaviour:end_request(ok, State);
 recv_data(Sock, Size, Behaviour, State) ->
-    case gen_tcp:recv(Sock, 0, 20 * 1000) of
+    case gen_tcp:recv(Sock, 0, ?RECV_TIMEOUT) of
         {ok, Batch} ->
             NewState = Behaviour:handle_data(Batch, State),
             recv_data(Sock, Size - size(Batch), Behaviour, NewState);
