@@ -14,11 +14,7 @@ HTTP client
 
 - Add Options argument to http_connect()?
 
-- Normalize HTTP headers inside format_headers()
-
 - HTTP/1.1 support: chunked transfer coding, persistent and pipeline
   connections.
-
-- Maybe we need to parse (some) HTTP header values?
 
 - TCP6 support?

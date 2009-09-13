@@ -117,7 +117,6 @@ http_request('GET', Path, Headers) ->
     HeadersData = format_headers(Headers, <<>>),
     <<Header/binary,HeadersData/binary,"\r\n">>.
 
-% TODO: Need to check corner cases
 format_headers([], Data) ->
     Data;
 format_headers([{Key, Value} | Headers], Data) ->
