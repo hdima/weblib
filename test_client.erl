@@ -15,11 +15,14 @@ handle_headers({_, StatNum, _}=Status, Headers, _State)
     % TODO: Limit number of redirects
     io:format("Redirect. Status: ~p~nHeaders: ~p~n~n", [Status, Headers]),
     Location = proplists:get_value('Location', Headers),
-    {redirect, http_request(binary_to_list(Location))};
+    {stop, http_request(binary_to_list(Location))};
 handle_headers(Status, Headers, State) ->
     io:format("Status: ~p~nHeaders: ~p~n~n", [Status, Headers]),
     {ok, State}.
 
+handle_body(closed, _State) ->
+    io:format("Closed.~n"),
+    {error, closed};
 handle_body(eof, _State) ->
     io:format("End.~n");
 handle_body(Chunk, State) ->

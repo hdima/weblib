@@ -5,19 +5,20 @@
 %%
 %%      handle_headers(Status, Headers, Args) -> Result
 %%          Status = {Version, Status, Comment}
+%%          Version = {Major=int(), Minor=int()}
 %%          Headers = [{Key, Value} | ...]
 %%          Key = atom() | binary()
 %%          Value = binary()
 %%          Args = list()
-%%          Result = {ok, NewState} | {stop, Reason} | {redirect, Result}
+%%          Result = {ok, State} | stop | {stop, Result}
 %%
 %%      handle_body(Chunk, State) -> Result
-%%          Chunk = binary() | eof
-%%          Result = {ok, NewState} | {stop, Reason} | ok
+%%          Chunk = binary() | eof | closed
+%%          Result = {ok, NewState} | stop | {stop, Result} | ok
 %%
 -module(http_client).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.2").
+-vsn("0.3").
 
 %% Public interface
 -export([http_request/4]).
@@ -48,7 +49,7 @@ behaviour_info(_Other) ->
 %%      Value = binary()
 %%      Behaviour = atom()
 %%      Args = list()
-%%      Result = ok | {stop, Reason} | {error, Reason}
+%%      Result = ok | {error, Reason}
 %%
 http_request(Url, Headers, Behaviour, Args) ->
     case url:urlsplit(Url) of
@@ -77,11 +78,11 @@ http_connect({http, Host, Port, Path}, Headers, Behaviour, Args) ->
                     Result = recv_response(Sock, Behaviour, Args),
                     gen_tcp:close(Sock),
                     Result;
-                Other ->
-                    Other
+                Error ->
+                    Error
             end;
-        Other ->
-            Other
+        Error ->
+            Error
     end.
 
 
@@ -138,13 +139,15 @@ recv_response(Sock, Behaviour, Args) ->
                 {ok, State} ->
                     inet:setopts(Sock, [{packet, raw}]),
                     recv_data(Sock, Size, Behaviour, State);
-                {redirect, Result} ->
+                {stop, Result} ->
                     Result;
-                Other ->
-                    Other
+                stop ->
+                    ok;
+                Error ->
+                    Error
             end;
-        Other ->
-            Other
+        Error ->
+            Error
     end.
 
 recv_headers(Sock, HTTPHeader, Headers, Size) ->
@@ -162,8 +165,8 @@ recv_headers(Sock, HTTPHeader, Headers, Size) ->
         {ok, {http_error, Reason}} ->
             % TODO: Return different result?
             {error, Reason};
-        Other ->
-            Other
+        Error ->
+            Error
     end.
 
 recv_data(_Sock, 0, Behaviour, State) ->
@@ -180,11 +183,20 @@ recv_data(Sock, Size, Behaviour, State) ->
                             S = Num - size(Batch),
                             recv_data(Sock, S, Behaviour, NewState)
                     end;
-                Other ->
-                    Other
+                {stop, Result} ->
+                    Result;
+                stop ->
+                    ok;
+                Error ->
+                    Error
             end;
         {error, closed} ->
-            recv_data(Sock, 0, Behaviour, State);
-        Other ->
-            Other
+            case Size of
+                unknown ->
+                    Behaviour:handle_body(eof, State);
+                _ ->
+                    Behaviour:handle_body(closed, State)
+            end;
+        Error ->
+            Error
     end.
