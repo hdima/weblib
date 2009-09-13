@@ -19,6 +19,9 @@ handle_headers(Status, Headers, [Pid]) ->
     Pid ! {handle_headers, Status, Headers},
     {ok, Pid}.
 
+handle_body(closed, Pid) ->
+    Pid ! {handle_body, closed},
+    {error, closed};
 handle_body(eof, Pid) ->
     Pid ! {handle_body, eof},
     ok;
