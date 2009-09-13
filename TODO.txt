@@ -1,9 +1,7 @@
 HTTP client
 -----------
 
-- Need a proper way to handle redirects in behaviour callbacks. Is it enough to
-  return {stop, _} from handle_headers()? We need a way to return result of
-  redirected request as result of the main request.
+- Test different callback responses
 
 - Ignore body for 1xx, 204 and 304 status responses (and all responses to a
   HEAD request) as per RFC-2616

@@ -9,7 +9,7 @@
 %%          Key = atom() | binary()
 %%          Value = binary()
 %%          Args = list()
-%%          Result = {ok, NewState} | {stop, Reason}
+%%          Result = {ok, NewState} | {stop, Reason} | {redirect, Result}
 %%
 %%      handle_body(Chunk, State) -> Result
 %%          Chunk = binary() | eof
@@ -139,6 +139,8 @@ recv_response(Sock, Behaviour, Args) ->
                 {ok, State} ->
                     inet:setopts(Sock, [{packet, raw}]),
                     recv_data(Sock, Size, Behaviour, State);
+                {redirect, Result} ->
+                    Result;
                 Other ->
                     Other
             end;
