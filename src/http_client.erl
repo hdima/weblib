@@ -179,11 +179,11 @@ recv_data(Sock, Size, Behaviour, State) ->
                             S = Num - size(Batch),
                             recv_data(Sock, S, Behaviour, NewState)
                     end;
-                {error, closed} ->
-                    recv_data(Sock, 0, Behaviour, State);
                 Other ->
                     Other
             end;
+        {error, closed} ->
+            recv_data(Sock, 0, Behaviour, State);
         Other ->
             Other
     end.

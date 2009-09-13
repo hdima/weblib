@@ -31,7 +31,7 @@ handle_body(Chunk, Pid) ->
 %% Test methods
 %%
 
-start_test_server(Pid) ->
+start_test_server(Pid, Response) ->
     {ok, Listen} = gen_tcp:listen(0,
         [binary, {ip, {127, 0, 0, 1}}, {active, false}, {packet, http_bin}]),
     {ok, Port} = inet:port(Listen),
@@ -43,8 +43,7 @@ start_test_server(Pid) ->
         = gen_tcp:recv(Socket, 0, 3000),
     {ok, http_eoh} = gen_tcp:recv(Socket, 0, 3000),
     ok = inet:setopts(Socket, [{packet, raw}]),
-    ok = gen_tcp:send(Socket,
-        <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>),
+    ok = gen_tcp:send(Socket, Response),
     ok = gen_tcp:close(Socket),
     ok = gen_tcp:close(Listen).
 
@@ -61,6 +60,8 @@ test_http_client(Result) ->
         {handle_headers, {{1, 0}, 200, <<"OK">>},
                 [{'Content-Length', <<"2">>}]} ->
             test_http_client([1 | Result]);
+        {handle_headers, {{1, 0}, 200, <<"OK">>}, []} ->
+            test_http_client([1 | Result]);
         {handle_body, <<"OK">>} ->
             test_http_client([2 | Result]);
         {handle_body, eof} ->
@@ -71,8 +72,21 @@ test_http_client(Result) ->
     end.
 
 
-test() ->
+test_http_client() ->
     Pid = self(),
-    spawn(fun () -> start_test_server(Pid) end),
-    ok = test_http_client([]),
+    Response = <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>,
+    spawn(fun () -> start_test_server(Pid, Response) end),
+    ok = test_http_client([]).
+
+
+test_responses_without_content_length() ->
+    Pid = self(),
+    Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
+    spawn(fun () -> start_test_server(Pid, Response) end),
+    ok = test_http_client([]).
+
+
+test() ->
+    test_http_client(),
+    test_responses_without_content_length(),
     ok.

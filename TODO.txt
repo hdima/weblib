@@ -1,8 +1,6 @@
 HTTP client
 -----------
 
-- Add test for responses without Content-Length
-
 - Need a proper way to handle redirects in behaviour callbacks. Is it enough to
   return {stop, _} from handle_headers()? We need a way to return result of
   redirected request as result of the main request.
