@@ -5,6 +5,12 @@ HTTP client
   return {stop, _} from handle_headers()? We need a way to return result of
   redirected request as result of the main request.
 
+- Ignore body for 1xx, 204 and 304 status responses (and all responses to a
+  HEAD request) as per RFC-2616
+
+- Handle Transfer-Encoding headers (see also HTTP/1.1 support below). Also
+  ignore Content-Length if Transfer-Encoding is present.
+
 - Add support for methods other than GET. Maybe behaviour interface also need
   to be updated for example to transfer big files with POST method.
 
