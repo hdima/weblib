@@ -133,7 +133,7 @@ format_headers([{Key, Value} | Headers], Data) ->
 %%      Args = list()
 %%
 recv_response(Sock, Behaviour, Args) ->
-    case recv_headers(Sock, none, [], 0) of
+    case recv_headers(Sock, none, [], unknown) of
         {ok, Status, Headers, Size} ->
             case Behaviour:handle_headers(Status, Headers, Args) of
                 {ok, State} ->
@@ -172,7 +172,15 @@ recv_data(Sock, Size, Behaviour, State) ->
         {ok, Batch} ->
             case Behaviour:handle_body(Batch, State) of
                 {ok, NewState} ->
-                    recv_data(Sock, Size - size(Batch), Behaviour, NewState);
+                    case Size of
+                        unknown ->
+                            recv_data(Sock, Size, Behaviour, NewState);
+                        Num ->
+                            S = Num - size(Batch),
+                            recv_data(Sock, S, Behaviour, NewState)
+                    end;
+                {error, closed} ->
+                    recv_data(Sock, 0, Behaviour, State);
                 Other ->
                     Other
             end;
