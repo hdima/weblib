@@ -9,8 +9,8 @@ HTTP client
 - Handle Transfer-Encoding headers (see also HTTP/1.1 support below). Also
   ignore Content-Length if Transfer-Encoding is present.
 
-- Add support for methods other than GET. Maybe behaviour interface also need
-  to be updated for example to transfer big files with POST method.
+- Add support for methods other than GET and HEAD. Maybe behaviour interface
+  also need to be updated for example to transfer big files with POST method.
 
 - Add Options argument to http_connect()?
 

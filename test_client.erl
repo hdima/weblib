@@ -1,6 +1,6 @@
 -module(test_client).
 
--export([http_request/1]).
+-export([http_request/1, http_request/2]).
 
 -export([handle_headers/3, handle_body/2]).
 
@@ -8,14 +8,17 @@
 
 
 http_request(Url) ->
-    http_client:http_request(Url, [], ?MODULE, []).
+    http_request(Url, 'GET').
 
-handle_headers({_, StatNum, _}=Status, Headers, _State)
+http_request(Url, Method) ->
+    http_client:http_request(Url, [], Method, ?MODULE, [Method]).
+
+handle_headers({_, StatNum, _}=Status, Headers, [Method])
         when StatNum =:= 301; StatNum =:= 302 ->
     % TODO: Limit number of redirects
     io:format("Redirect. Status: ~p~nHeaders: ~p~n~n", [Status, Headers]),
     Location = proplists:get_value('Location', Headers),
-    {stop, http_request(binary_to_list(Location))};
+    {stop, http_request(binary_to_list(Location), Method)};
 handle_headers(Status, Headers, State) ->
     io:format("Status: ~p~nHeaders: ~p~n~n", [Status, Headers]),
     {ok, State}.

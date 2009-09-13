@@ -21,7 +21,7 @@
 -vsn("0.3").
 
 %% Public interface
--export([http_request/4]).
+-export([http_request/4, http_request/5]).
 
 %% Behaviour information
 -export([behaviour_info/1]).
@@ -41,7 +41,7 @@ behaviour_info(_Other) ->
 
 
 %%
-%% @doc Request Url
+%% @doc Send HTTP Get request
 %% @spec http_request(Url, Headers, Behaviour, Args) -> Result
 %%      Url = string()
 %%      Headers = [{Key, Value} | ...]
@@ -52,14 +52,31 @@ behaviour_info(_Other) ->
 %%      Result = ok | {error, Reason}
 %%
 http_request(Url, Headers, Behaviour, Args) ->
+    http_request(Url, Headers, 'GET', Behaviour, Args).
+
+
+%%
+%% @doc Send HTTP request
+%% @spec http_request(Url, Headers, Method, Behaviour, Args) -> Result
+%%      Url = string()
+%%      Headers = [{Key, Value} | ...]
+%%      Key = atom()
+%%      Value = binary()
+%%      Method = 'GET' | 'HEAD'
+%%      Behaviour = atom()
+%%      Args = list()
+%%      Result = ok | {error, Reason}
+%%
+http_request(Url, Headers, Method, Behaviour, Args) ->
     case url:urlsplit(Url) of
         {error, Reason} ->
             {error, Reason};
         {ok, UrlParts} ->
-            http_connect(UrlParts, Headers, Behaviour, Args)
+            http_connect(UrlParts, Headers, Method, Behaviour, Args)
     end.
 
-http_connect({http, Host, Port, Path}, Headers, Behaviour, Args) ->
+
+http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->
     Options = [
         {active, false},
         binary,
@@ -71,11 +88,11 @@ http_connect({http, Host, Port, Path}, Headers, Behaviour, Args) ->
     ],
     case gen_tcp:connect(Host, Port, Options, ?CONNECT_TIMEOUT) of
         {ok, Sock} ->
-            Request = http_request('GET', Path,
+            Request = create_request(Method, Path,
                 http_headers(Headers, Host, [])),
             case gen_tcp:send(Sock, Request) of
                 ok ->
-                    Result = recv_response(Sock, Behaviour, Args),
+                    Result = recv_response(Sock, Method, Behaviour, Args),
                     gen_tcp:close(Sock),
                     Result;
                 Error ->
@@ -105,18 +122,20 @@ http_headers([], Host, Collected) ->
 
 %%
 %% @doc Create and return HTTP request
-%% @spec http_request(Method, Path, Headers) -> Request
+%% @spec create_request(Method, Path, Headers) -> Request
 %%      Method = 'GET'
 %%      Path = binary()
 %%      Headers = [{Key, Value} | ...]
 %%      Key = atom()
 %%      Value = binary()
 %%
-http_request('GET', Path, Headers) ->
+create_request(Method, Path, Headers)
+        when Method =:= 'GET'; Method =:= 'HEAD' ->
+    M = atom_to_binary(Method, latin1),
     P = list_to_binary(Path),
-    Header = <<"GET ",P/binary," HTTP/1.0\r\n">>,
+    Status = <<M/binary," ",P/binary," HTTP/1.0\r\n">>,
     HeadersData = format_headers(Headers, <<>>),
-    <<Header/binary,HeadersData/binary,"\r\n">>.
+    <<Status/binary,HeadersData/binary,"\r\n">>.
 
 format_headers([], Data) ->
     Data;
@@ -127,18 +146,24 @@ format_headers([{Key, Value} | Headers], Data) ->
 
 %%
 %% @doc Receive HTTP response
-%% @spec recv_response(Sock, Behaviour, Args)
+%% @spec recv_response(Sock, Method, Behaviour, Args)
 %%      Sock = socket()
+%%      Method = atom()
 %%      Behaviour = atom()
 %%      Args = list()
 %%
-recv_response(Sock, Behaviour, Args) ->
+recv_response(Sock, Method, Behaviour, Args) ->
     case recv_headers(Sock, none, [], unknown) of
         {ok, Status, Headers, Size} ->
             case Behaviour:handle_headers(Status, Headers, Args) of
                 {ok, State} ->
-                    inet:setopts(Sock, [{packet, raw}]),
-                    recv_data(Sock, Size, Behaviour, State);
+                    case Method of
+                        'HEAD' ->
+                            Behaviour:handle_body(eof, State);
+                        'GET' ->
+                            inet:setopts(Sock, [{packet, raw}]),
+                            recv_data(Sock, Size, Behaviour, State)
+                    end;
                 {stop, Result} ->
                     Result;
                 stop ->

@@ -34,13 +34,13 @@ handle_body(Chunk, Pid) ->
 %% Test methods
 %%
 
-start_test_server(Pid, Response) ->
+start_test_server(Method, Pid, Response) ->
     {ok, Listen} = gen_tcp:listen(0,
         [binary, {ip, {127, 0, 0, 1}}, {active, false}, {packet, http_bin}]),
     {ok, Port} = inet:port(Listen),
-    spawn(fun () -> start_test_client(Port, Pid) end),
+    spawn(fun () -> start_test_client(Method, Port, Pid) end),
     {ok, Socket} = gen_tcp:accept(Listen, 3000),
-    {ok, {http_request, 'GET', {abs_path, <<"/">>}, {1, 0}}}
+    {ok, {http_request, Method, {abs_path, <<"/">>}, {1, 0}}}
         = gen_tcp:recv(Socket, 0, 3000),
     {ok, {http_header, _, 'Host', _, <<"localhost">>}}
         = gen_tcp:recv(Socket, 0, 3000),
@@ -51,45 +51,57 @@ start_test_server(Pid, Response) ->
     ok = gen_tcp:close(Listen).
 
 
-start_test_client(Port, Pid) ->
+start_test_client(Method, Port, Pid) ->
     http_client:http_request("http://localhost:" ++ integer_to_list(Port),
-        [], test_http_client, [Pid]).
+        [], Method, test_http_client, [Pid]).
 
 
-test_http_client([3, 2, 1]) ->
+test_http_client([]) ->
     ok;
-test_http_client(Result) ->
+test_http_client([Pattern | Results]) ->
     receive
-        {handle_headers, {{1, 0}, 200, <<"OK">>},
-                [{'Content-Length', <<"2">>}]} ->
-            test_http_client([1 | Result]);
-        {handle_headers, {{1, 0}, 200, <<"OK">>}, []} ->
-            test_http_client([1 | Result]);
-        {handle_body, <<"OK">>} ->
-            test_http_client([2 | Result]);
-        {handle_body, eof} ->
-            test_http_client([3 | Result])
+        Pattern ->
+            test_http_client(Results)
     after
         3000 ->
             error
     end.
 
 
-test_http_client() ->
+test_get_request() ->
     Pid = self(),
     Response = <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>,
-    spawn(fun () -> start_test_server(Pid, Response) end),
-    ok = test_http_client([]).
+    spawn(fun () -> start_test_server('GET', Pid, Response) end),
+    ok = test_http_client([
+        {handle_headers, {{1, 0}, 200, <<"OK">>},
+            [{'Content-Length', <<"2">>}]},
+        {handle_body, <<"OK">>},
+        {handle_body, eof}
+    ]).
 
 
 test_responses_without_content_length() ->
     Pid = self(),
     Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
-    spawn(fun () -> start_test_server(Pid, Response) end),
-    ok = test_http_client([]).
+    spawn(fun () -> start_test_server('GET', Pid, Response) end),
+    ok = test_http_client([
+        {handle_headers, {{1, 0}, 200, <<"OK">>}, []},
+        {handle_body, <<"OK">>},
+        {handle_body, eof}
+    ]).
+
+test_head_request() ->
+    Pid = self(),
+    Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
+    spawn(fun () -> start_test_server('HEAD', Pid, Response) end),
+    ok = test_http_client([
+        {handle_headers, {{1, 0}, 200, <<"OK">>}, []},
+        {handle_body, eof}
+    ]).
 
 
 test() ->
-    test_http_client(),
+    test_get_request(),
     test_responses_without_content_length(),
+    test_head_request(),
     ok.
