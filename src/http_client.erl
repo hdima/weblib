@@ -154,13 +154,15 @@ format_headers([{Key, Value} | Headers], Data) ->
 %%
 recv_response(Sock, Method, Behaviour, Args) ->
     case recv_headers(Sock, none, [], unknown) of
-        {ok, Status, Headers, Size} ->
+        {ok, {_, S, _}=Status, Headers, Size} ->
             case Behaviour:handle_headers(Status, Headers, Args) of
                 {ok, State} ->
                     case Method of
                         'HEAD' ->
                             Behaviour:handle_body(eof, State);
-                        'GET' ->
+                        _ when S < 200; S =:= 204; S =:= 304 ->
+                            Behaviour:handle_body(eof, State);
+                        _ ->
                             inet:setopts(Sock, [{packet, raw}]),
                             recv_data(Sock, Size, Behaviour, State)
                     end;
