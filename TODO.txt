@@ -1,6 +1,10 @@
 HTTP client
 -----------
 
+- Need a proper way to handle redirects in behaviour callbacks. Is it enough to
+  return {stop, _} from handle_headers()? We need a way to return result of
+  redirected request as result of the main request.
+
 - Add support for methods other than GET. Maybe behaviour interface also need
   to be updated for example to transfer big files with POST method.
 

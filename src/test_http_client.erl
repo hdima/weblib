@@ -17,11 +17,14 @@
 
 handle_headers(Status, Headers, [Pid]) ->
     Pid ! {handle_headers, Status, Headers},
-    Pid.
+    {ok, Pid}.
 
+handle_body(eof, Pid) ->
+    Pid ! {handle_body, eof},
+    ok;
 handle_body(Chunk, Pid) ->
     Pid ! {handle_body, Chunk},
-    Pid.
+    {ok, Pid}.
 
 
 %%

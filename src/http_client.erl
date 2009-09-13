@@ -13,7 +13,7 @@
 %%
 %%      handle_body(Chunk, State) -> Result
 %%          Chunk = binary() | eof
-%%          Result = {ok, NewState} | {stop, Reason}
+%%          Result = {ok, NewState} | {stop, Reason} | ok
 %%
 -module(http_client).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
@@ -135,9 +135,13 @@ format_headers([{Key, Value} | Headers], Data) ->
 recv_response(Sock, Behaviour, Args) ->
     case recv_headers(Sock, none, [], 0) of
         {ok, Status, Headers, Size} ->
-            State = Behaviour:handle_headers(Status, Headers, Args),
-            inet:setopts(Sock, [{packet, raw}]),
-            recv_data(Sock, Size, Behaviour, State);
+            case Behaviour:handle_headers(Status, Headers, Args) of
+                {ok, State} ->
+                    inet:setopts(Sock, [{packet, raw}]),
+                    recv_data(Sock, Size, Behaviour, State);
+                Other ->
+                    Other
+            end;
         Other ->
             Other
     end.
@@ -166,8 +170,12 @@ recv_data(_Sock, 0, Behaviour, State) ->
 recv_data(Sock, Size, Behaviour, State) ->
     case gen_tcp:recv(Sock, 0, ?RECV_TIMEOUT) of
         {ok, Batch} ->
-            NewState = Behaviour:handle_body(Batch, State),
-            recv_data(Sock, Size - size(Batch), Behaviour, NewState);
+            case Behaviour:handle_body(Batch, State) of
+                {ok, NewState} ->
+                    recv_data(Sock, Size - size(Batch), Behaviour, NewState);
+                Other ->
+                    Other
+            end;
         Other ->
             Other
     end.
