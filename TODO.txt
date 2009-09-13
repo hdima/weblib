@@ -1,0 +1,18 @@
+HTTP client
+-----------
+
+- Add support for methods other than GET. Maybe behaviour interface also need
+  to be updated for example to transfer big files with POST method.
+
+- Add Options argument to http_connect()?
+
+- Normalize HTTP headers inside format_headers()
+
+- Support responses without Content-Length
+
+- HTTP/1.1 support: chunked transfer coding, persistent and pipeline
+  connections.
+
+- Maybe we need to parse (some) HTTP header values?
+
+- TCP6 support?

@@ -1,11 +1,9 @@
 %%
 %% @doc URL handling library
 %%
-%% @author Dmitry Vasiliev <dima@hlabs.spb.ru>
-%% @version 0.1
-%%
 -module(url).
--vsn(0.1).
+-author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
+-vsn("0.1").
 
 -export([urlsplit/1]).
 
