@@ -61,9 +61,9 @@ http_request(Url, Headers, Behaviour, Args) ->
 http_connect({http, Host, Port, Path}, Headers, Behaviour, Args) ->
     Options = [
         {active, false},
-        {recbuf, 16384},
         binary,
         inet,
+        {nodelay, true},
         {packet, http_bin},
         {send_timeout, ?SEND_TIMEOUT},
         {send_timeout_close, true}
