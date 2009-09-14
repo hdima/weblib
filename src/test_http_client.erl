@@ -46,7 +46,7 @@ start_test_server(Method, State, Response) ->
     {ok, Socket} = gen_tcp:accept(Listen, 3000),
     {ok, {http_request, Method, {abs_path, <<"/">>}, {1, 0}}}
         = gen_tcp:recv(Socket, 0, 3000),
-    {ok, {http_header, _, 'Host', _, <<"localhost">>}}
+    {ok, {http_header, _, 'Host', _, <<"localhost:",_/binary>>}}
         = gen_tcp:recv(Socket, 0, 3000),
     {ok, http_eoh} = gen_tcp:recv(Socket, 0, 3000),
     ok = inet:setopts(Socket, [{packet, raw}]),

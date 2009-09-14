@@ -7,9 +7,15 @@ HTTP client
 - Add support for methods other than GET and HEAD. Maybe behaviour interface
   also need to be updated for example to transfer big files with POST method.
 
+- Add support for different content codings
+
 - Add Options argument to http_connect()? Maybe only for timeouts?
 
 - HTTP/1.1 support: chunked transfer coding, persistent and pipeline
   connections.
+
+- Switching HTTP versions support
+
+- HTTPS support
 
 - TCP6 support?

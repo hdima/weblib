@@ -74,7 +74,7 @@ http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->
     case gen_tcp:connect(Host, Port, Options, ?CONNECT_TIMEOUT) of
         {ok, Sock} ->
             Request = create_request(Method, Path,
-                http_headers(Headers, Host, [])),
+                http_headers(Headers, {Host, Port}, [])),
             case gen_tcp:send(Sock, Request) of
                 ok ->
                     Result = recv_response(Sock, Method, Behaviour, Args),
@@ -92,7 +92,7 @@ http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->
 %% @doc Normalize HTTP headers
 %% @spec http_headers(Headers, Host, []) -> [{binary(), binary()} | ...]
 %%      Headers = [{atom(), binary()} | ...]
-%%      Host = binary()
+%%      Host = {list(), integer()}
 %%
 http_headers([{'Host', Host} | Headers], _, Collected) ->
     http_headers(Headers, seen, [{<<"Host">>, Host} | Collected]);
@@ -101,8 +101,11 @@ http_headers([{Key, Value} | Headers], Host, Collected) ->
         [{atom_to_binary(Key, ascii), Value} | Collected]);
 http_headers([], seen, Collected) ->
     Collected;
-http_headers([], Host, Collected) ->
-    http_headers([], seen, [{<<"Host">>, list_to_binary(Host)} | Collected]).
+http_headers([], {Host, Port}, Collected) ->
+    H = list_to_binary(Host),
+    P = list_to_binary(integer_to_list(Port)),
+    http_headers([], seen, [{<<"Host">>,
+        <<H/binary,":",P/binary>>} | Collected]).
 
 
 %%
