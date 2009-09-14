@@ -1,8 +1,6 @@
 HTTP client
 -----------
 
-- Test different callback responses
-
 - Handle Transfer-Encoding headers (see also HTTP/1.1 support below). Also
   ignore Content-Length if Transfer-Encoding is present.
 
