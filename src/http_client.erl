@@ -92,7 +92,7 @@ http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->
 %% @doc Normalize HTTP headers
 %% @spec http_headers(Headers, Host, []) -> [{binary(), binary()} | ...]
 %%      Headers = [{atom(), binary()} | ...]
-%%      Host = {list(), integer()}
+%%      Host = {http, list(), integer()}
 %%
 http_headers([{'Host', Host} | Headers], _, Collected) ->
     http_headers(Headers, seen, [{<<"Host">>, Host} | Collected]);
@@ -199,7 +199,7 @@ recv_data(Sock, Size, Behaviour, State) ->
                 {ok, NewState} ->
                     case Size of
                         unknown ->
-                            recv_data(Sock, Size, Behaviour, NewState);
+                            recv_data(Sock, unknown, Behaviour, NewState);
                         Num ->
                             S = Num - size(Batch),
                             recv_data(Sock, S, Behaviour, NewState)
