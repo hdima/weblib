@@ -10,11 +10,11 @@
 %%          Key = atom() | binary()
 %%          Value = binary()
 %%          Args = term()
-%%          Result = {ok, State} | stop | {stop, Result}
+%%          Result = {ok, State} | {stop, State}
 %%
 %%      handle_body(Chunk, State) -> Result
 %%          Chunk = binary() | eof | closed
-%%          Result = {ok, NewState} | stop | {stop, Result} | ok
+%%          Result = {ok, NewState} | {stop, State} | ok
 %%
 -module(http_client).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
@@ -153,10 +153,8 @@ recv_response(Sock, Method, Behaviour, Args) ->
                             inet:setopts(Sock, [{packet, raw}]),
                             recv_data(Sock, Size, Behaviour, State)
                     end;
-                {stop, Result} ->
-                    Result;
-                stop ->
-                    ok;
+                {stop, State} ->
+                    Behaviour:handle_body(eof, State);
                 Error ->
                     Error
             end;
@@ -197,10 +195,8 @@ recv_data(Sock, Size, Behaviour, State) ->
                             S = Num - size(Batch),
                             recv_data(Sock, S, Behaviour, NewState)
                     end;
-                {stop, Result} ->
-                    Result;
-                stop ->
-                    ok;
+                {stop, State} ->
+                    Behaviour:handle_body(eof, State);
                 Error ->
                     Error
             end;

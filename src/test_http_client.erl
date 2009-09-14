@@ -31,9 +31,8 @@ handle_body(Chunk, Pid) ->
 
 
 %%
-%% Test methods
+%% @doc Start test server
 %%
-
 start_test_server(Method, Pid, Response) ->
     {ok, Listen} = gen_tcp:listen(0,
         [binary, {ip, {127, 0, 0, 1}}, {active, false}, {packet, http_bin}]),
@@ -51,6 +50,9 @@ start_test_server(Method, Pid, Response) ->
     ok = gen_tcp:close(Listen).
 
 
+%%
+%% @doc Start test client
+%%
 start_test_client(Method, Port, Pid) ->
     http_client:http_request(Method,
         "http://localhost:" ++ integer_to_list(Port),
