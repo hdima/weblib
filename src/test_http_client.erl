@@ -6,7 +6,7 @@
 -export([test/0]).
 
 % Behaviour callbacks
--export([handle_headers/3, handle_body/2]).
+-export([handle_headers/4, handle_body/2]).
 
 -behaviour(http_client).
 
@@ -15,8 +15,8 @@
 %% Behaviour callbacks
 %%
 
-handle_headers(Status, Headers, [Pid]) ->
-    Pid ! {handle_headers, Status, Headers},
+handle_headers(Method, Status, Headers, Pid) ->
+    Pid ! {handle_headers, Method, Status, Headers},
     {ok, Pid}.
 
 handle_body(closed, Pid) ->
@@ -52,8 +52,9 @@ start_test_server(Method, Pid, Response) ->
 
 
 start_test_client(Method, Port, Pid) ->
-    http_client:http_request("http://localhost:" ++ integer_to_list(Port),
-        [], Method, test_http_client, [Pid]).
+    http_client:http_request(Method,
+        "http://localhost:" ++ integer_to_list(Port),
+        [], test_http_client, Pid).
 
 
 test_http_client([]) ->
@@ -73,7 +74,7 @@ test_get_request() ->
     Response = <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>,
     spawn(fun () -> start_test_server('GET', Pid, Response) end),
     ok = test_http_client([
-        {handle_headers, {{1, 0}, 200, <<"OK">>},
+        {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>},
             [{'Content-Length', <<"2">>}]},
         {handle_body, <<"OK">>},
         {handle_body, eof}
@@ -85,7 +86,7 @@ test_responses_without_content_length() ->
     Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
     spawn(fun () -> start_test_server('GET', Pid, Response) end),
     ok = test_http_client([
-        {handle_headers, {{1, 0}, 200, <<"OK">>}, []},
+        {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, <<"OK">>},
         {handle_body, eof}
     ]).
@@ -95,7 +96,7 @@ test_head_request() ->
     Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
     spawn(fun () -> start_test_server('HEAD', Pid, Response) end),
     ok = test_http_client([
-        {handle_headers, {{1, 0}, 200, <<"OK">>}, []},
+        {handle_headers, 'HEAD', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, eof}
     ]).
 

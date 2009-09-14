@@ -3,13 +3,13 @@
 %%
 %% Callback module interface:
 %%
-%%      handle_headers(Status, Headers, Args) -> Result
+%%      handle_headers(Method, Status, Headers, Args) -> Result
 %%          Status = {Version, Status, Comment}
 %%          Version = {Major=int(), Minor=int()}
 %%          Headers = [{Key, Value} | ...]
 %%          Key = atom() | binary()
 %%          Value = binary()
-%%          Args = list()
+%%          Args = term()
 %%          Result = {ok, State} | stop | {stop, Result}
 %%
 %%      handle_body(Chunk, State) -> Result
@@ -18,10 +18,10 @@
 %%
 -module(http_client).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.3").
+-vsn("0.4").
 
 %% Public interface
--export([http_request/4, http_request/5]).
+-export([http_request/5]).
 
 %% Behaviour information
 -export([behaviour_info/1]).
@@ -35,39 +35,24 @@
 %% @doc Behaviour information
 %%
 behaviour_info(callbacks) ->
-    [{handle_headers, 3}, {handle_body, 2}];
+    [{handle_headers, 4}, {handle_body, 2}];
 behaviour_info(_Other) ->
     undefined.
 
 
 %%
-%% @doc Send HTTP Get request
-%% @spec http_request(Url, Headers, Behaviour, Args) -> Result
-%%      Url = string()
-%%      Headers = [{Key, Value} | ...]
-%%      Key = atom()
-%%      Value = binary()
-%%      Behaviour = atom()
-%%      Args = list()
-%%      Result = ok | {error, Reason}
-%%
-http_request(Url, Headers, Behaviour, Args) ->
-    http_request(Url, Headers, 'GET', Behaviour, Args).
-
-
-%%
 %% @doc Send HTTP request
-%% @spec http_request(Url, Headers, Method, Behaviour, Args) -> Result
+%% @spec http_request(Method, Url, Headers, Behaviour, Args) -> Result
+%%      Method = 'GET' | 'HEAD'
 %%      Url = string()
 %%      Headers = [{Key, Value} | ...]
 %%      Key = atom()
 %%      Value = binary()
-%%      Method = 'GET' | 'HEAD'
 %%      Behaviour = atom()
 %%      Args = list()
 %%      Result = ok | {error, Reason}
 %%
-http_request(Url, Headers, Method, Behaviour, Args) ->
+http_request(Method, Url, Headers, Behaviour, Args) ->
     case url:urlsplit(Url) of
         {error, Reason} ->
             {error, Reason};
@@ -155,12 +140,14 @@ format_headers([{Key, Value} | Headers], Data) ->
 recv_response(Sock, Method, Behaviour, Args) ->
     case recv_headers(Sock, none, [], unknown) of
         {ok, {_, S, _}=Status, Headers, Size} ->
-            case Behaviour:handle_headers(Status, Headers, Args) of
+            case Behaviour:handle_headers(Method, Status, Headers, Args) of
                 {ok, State} ->
                     case Method of
                         'HEAD' ->
+                            % Ignore body per RFC2616
                             Behaviour:handle_body(eof, State);
                         _ when S < 200; S =:= 204; S =:= 304 ->
+                            % Ignore body per RFC2616
                             Behaviour:handle_body(eof, State);
                         _ ->
                             inet:setopts(Sock, [{packet, raw}]),
