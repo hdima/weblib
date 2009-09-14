@@ -14,7 +14,7 @@ HTTP client
 - HTTP/1.1 support: chunked transfer coding, persistent and pipeline
   connections.
 
-- Switching HTTP versions support
+- HTTP version switch
 
 - HTTPS support
 
