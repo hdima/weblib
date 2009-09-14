@@ -74,7 +74,7 @@ http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->
     case gen_tcp:connect(Host, Port, Options, ?CONNECT_TIMEOUT) of
         {ok, Sock} ->
             Request = create_request(Method, Path,
-                http_headers(Headers, {Host, Port}, [])),
+                http_headers(Headers, {http, Host, Port}, [])),
             case gen_tcp:send(Sock, Request) of
                 ok ->
                     Result = recv_response(Sock, Method, Behaviour, Args),
@@ -101,11 +101,17 @@ http_headers([{Key, Value} | Headers], Host, Collected) ->
         [{atom_to_binary(Key, ascii), Value} | Collected]);
 http_headers([], seen, Collected) ->
     Collected;
-http_headers([], {Host, Port}, Collected) ->
+http_headers([], {http, Host, Port}, Collected) ->
     H = list_to_binary(Host),
-    P = list_to_binary(integer_to_list(Port)),
-    http_headers([], seen, [{<<"Host">>,
-        <<H/binary,":",P/binary>>} | Collected]).
+    case Port of
+        80 ->
+            % Default HTTP port
+            Val = H;
+        Port ->
+            P = list_to_binary(integer_to_list(Port)),
+            Val = <<H/binary,":",P/binary>>
+    end,
+    http_headers([], seen, [{<<"Host">>, Val} | Collected]).
 
 
 %%
