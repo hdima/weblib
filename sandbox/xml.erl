@@ -3,7 +3,7 @@
 -export([feed/2, feed/1]).
 
 
-feed(Xml) ->
+feed(Xml) when is_binary(Xml) ->
     Client = self(),
     spawn_monitor(fun () -> parse(Xml, Client) end).
 
@@ -14,13 +14,20 @@ feed(eof, {Server, Monitor}) ->
         {Server, Result} ->
             Result;
         {'DOWN', Monitor, process, Server, Reason} ->
-            {error, Reason}
+            {fatal_error, Reason}
     after
-        100 ->
-            timeout
+        500 ->
+            {fatal_error, no_response}
     end;
-feed(Xml, {Server, _}) ->
-    Server ! {self(), Xml}.
+feed(Xml, {Server, Monitor}) when is_binary(Xml) ->
+    Server ! {self(), Xml},
+    receive
+        {'DOWN', Monitor, process, Server, Reason} ->
+            {fatal_error, Reason}
+    after
+        0 ->
+            ok
+    end.
 
 
 parse(Xml, Client) ->
