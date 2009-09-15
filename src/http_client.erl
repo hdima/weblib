@@ -49,7 +49,7 @@ behaviour_info(_Other) ->
 %%      Key = atom()
 %%      Value = binary()
 %%      Behaviour = atom()
-%%      Args = list()
+%%      Args = term()
 %%      Result = ok | {error, Reason}
 %%
 http_request(Method, Url, Headers, Behaviour, Args) ->
@@ -144,7 +144,7 @@ format_headers([{Key, Value} | Headers], Data) ->
 %%      Sock = socket()
 %%      Method = atom()
 %%      Behaviour = atom()
-%%      Args = list()
+%%      Args = term()
 %%
 recv_response(Sock, Method, Behaviour, Args) ->
     case recv_headers(Sock, none, [], unknown) of
