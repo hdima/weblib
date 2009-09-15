@@ -1,3 +1,13 @@
+FeedParser
+----------
+
+- Define callback module interface
+
+- Tests
+
+- What about encodings other than Unicode encodings?
+
+
 HTTP client
 -----------
 

@@ -3,7 +3,7 @@ all: compile
 compile: $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
 
 ebin/%.beam: src/%.erl
-	erlc -Wall -pa ebin -o ebin/ $<
+	erlc -Wall -I include -pa ebin -o ebin/ $<
 
 test: compile
 	erl -noshell -pa ebin -s test_newslib test -s init stop
