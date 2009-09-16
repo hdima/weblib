@@ -1,6 +1,8 @@
 FeedParser
 ----------
 
+- Remove spawn_monitor in favor of spawn_link
+
 - Define callback module interface
 
 - Tests
