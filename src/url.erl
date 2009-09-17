@@ -29,7 +29,7 @@
 %%
 -module(url).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.1").
+-vsn("0.2").
 
 -export([urlsplit/1]).
 
@@ -40,7 +40,7 @@
 %% @doc Split URL to {scheme, host, port, path}
 %% @spec urlsplit(Url) -> Result
 %%      Url = string()
-%%      Result = {ok, Parts} | {error, url} | {error, scheme} | {error, port}
+%%      Result = Parts
 %%      Parts = {Scheme, NetLoc, Port, Path}
 %%      Scheme = http | https
 %%      NetLoc = string()
@@ -49,21 +49,11 @@
 %%
 urlsplit(Url) ->
     case re:run(Url, ?URL, [{capture, all_but_first, list}]) of
-        {match, [Scheme, NetLoc, Port, Path]} ->
-            case parse_scheme(string:to_lower(Scheme)) of
-                unknown ->
-                    {error, scheme};
-                SchemeTok ->
-                    case parse_port(Port, SchemeTok) of
-                        unknown ->
-                            {error, port};
-                        PortNum ->
-                            {ok, {SchemeTok, NetLoc,
-                                PortNum, get_path(Path)}}
-                    end
-            end;
+        {match, [S, NetLoc, P, Path]} ->
+            Scheme = parse_scheme(string:to_lower(S)),
+            {Scheme, NetLoc, parse_port(P, Scheme), get_path(Path)};
         _Other ->
-            {error, url}
+            exit(bad_url)
     end.
 
 %%
@@ -76,7 +66,7 @@ parse_scheme("http") ->
 parse_scheme("https") ->
     https;
 parse_scheme(_) ->
-    unknown.
+    exit(bad_scheme).
 
 %%
 %% @doc Parse port
@@ -85,10 +75,12 @@ parse_port("", http) ->
     80;
 parse_port("", https) ->
     443;
-parse_port(Port, _Scheme) when length(Port) > 0 ->
-    list_to_integer(Port);
-parse_port(_, _) ->
-    unknown.
+parse_port(Port, _Scheme) ->
+    try list_to_integer(Port)
+    catch
+        error:badarg ->
+            exit(bad_port)
+    end.
 
 %%
 %% @doc Normalize path

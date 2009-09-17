@@ -76,15 +76,11 @@ behaviour_info(_Other) ->
 %%      Value = binary()
 %%      Behaviour = atom()
 %%      Args = term()
-%%      Result = ok | {error, Reason}
+%%      Result = ok
 %%
 http_request(Method, Url, Headers, Behaviour, Args) ->
-    case url:urlsplit(Url) of
-        {error, Reason} ->
-            {error, Reason};
-        {ok, UrlParts} ->
-            http_connect(UrlParts, Headers, Method, Behaviour, Args)
-    end.
+    http_connect(url:urlsplit(Url), Headers, Method, Behaviour, Args),
+    ok.
 
 
 http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->

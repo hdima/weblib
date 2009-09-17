@@ -33,44 +33,45 @@
 
 
 test_urlsplit_http() ->
-    {ok, {http, "host.domain", 80, "/"}}
+    {http, "host.domain", 80, "/"}
         = url:urlsplit("host.domain"),
-    {ok, {http, "host.domain", 80, "/folder"}}
+    {http, "host.domain", 80, "/folder"}
         = url:urlsplit("host.domain/folder"),
-    {ok, {http, "host.domain", 80, "/"}}
+    {http, "host.domain", 80, "/"}
         = url:urlsplit("http://host.domain"),
-    {ok, {http, "host.domain", 80, "/"}}
+    {http, "host.domain", 80, "/"}
         = url:urlsplit("HTTP://host.domain"),
-    {ok, {http, "host.domain", 80, "/folder"}}
+    {http, "host.domain", 80, "/folder"}
         = url:urlsplit("http://host.domain/folder"),
-    {ok, {http, "host.domain", 8080, "/"}}
+    {http, "host.domain", 8080, "/"}
         = url:urlsplit("host.domain:8080"),
-    {ok, {http, "host.domain", 8080, "/folder"}}
+    {http, "host.domain", 8080, "/folder"}
         = url:urlsplit("host.domain:8080/folder"),
-    {ok, {http, "host.domain", 8080, "/"}}
+    {http, "host.domain", 8080, "/"}
         = url:urlsplit("http://host.domain:8080"),
-    {ok, {http, "host.domain", 8080, "/folder"}}
+    {http, "host.domain", 8080, "/folder"}
         = url:urlsplit("http://host.domain:8080/folder"),
     ok.
 
 
 test_urlsplit_https() ->
-    {ok, {https, "host.domain", 443, "/"}}
+    {https, "host.domain", 443, "/"}
         = url:urlsplit("https://host.domain"),
-    {ok, {https, "host.domain", 443, "/folder"}}
+    {https, "host.domain", 443, "/folder"}
         = url:urlsplit("https://host.domain/folder"),
-    {ok, {https, "host.domain", 443, "/folder"}}
+    {https, "host.domain", 443, "/folder"}
         = url:urlsplit("HTTPS://host.domain/folder"),
-    {ok, {https, "host.domain", 4430, "/"}}
+    {https, "host.domain", 4430, "/"}
         = url:urlsplit("https://host.domain:4430"),
-    {ok, {https, "host.domain", 4430, "/folder"}}
+    {https, "host.domain", 4430, "/folder"}
         = url:urlsplit("https://host.domain:4430/folder"),
     ok.
 
 
 test_urlsplit_errors() ->
-    {error, url} = url:urlsplit(""),
-    {error, scheme} = url:urlsplit("ftp://ftp.host/"),
+    {'EXIT', bad_url} = (catch url:urlsplit("")),
+    {'EXIT', bad_scheme} = (catch url:urlsplit("ftp://ftp.host/")),
+    {'EXIT', bad_port} = (catch url:urlsplit("http://web.host:port")),
     ok.
 
 
