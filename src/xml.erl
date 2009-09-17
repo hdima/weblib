@@ -72,6 +72,8 @@
     state
     }).
 
+-define(is_whitespace(C), C =:= 16#20; C =:= 16#9; C =:= 16#D; C =:= 16#A).
+
 
 %%
 %% @doc Behaviour information
@@ -89,16 +91,20 @@ behaviour_info(_Other) ->
 %%      Chunk = binary()
 %%      Behaviour = atom()
 %%      Args = term()
-%%      Result = {continue, DocId} | {eof, State} | {error, Reason}
+%%      Result = {continue, DocId} | {ok, State} | {error, Reason}
 %%      DocId = term()
 %%
 parse(<<>>, _, _) ->
     {error, nodata};
 parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
-    {ok, State} = Behaviour:start_document(Args),
-    {ok, NewsState} = parse_element(Chunk, Behaviour, State),
-    {ok, NextState} = Behaviour:end_document(NewsState),
-    {eof, NextState}.
+    case Behaviour:start_document(Args) of
+        {ok, State} ->
+            start_parse(Chunk, Behaviour, State);
+        {stop, State} ->
+            {ok, State};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 
 %%
@@ -106,13 +112,18 @@ parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
 %% @spec parse(Chunk, DocId) -> Result
 %%      Chunk = binary() | eof
 %%      DocId = term()
-%%      Result = {continue, DocId} | {eof, State) | {error, Reason}
+%%      Result = {continue, DocId} | {ok, State) | {error, Reason}
 %%      Reason = term()
 %%
 parse(eof, DocId) ->
-    {eof, DocId#state.state};
+    {ok, DocId#state.state};
 parse(Chunk, DocId) when is_binary(Chunk) ->
     {continue, DocId}.
+
+
+start_parse(Chunk, Behaviour, State) ->
+    {ok, NewsState} = parse_element(Chunk, Behaviour, State),
+    Behaviour:end_document(NewsState).
 
 
 parse_element(<<"<", Tail/binary>>, Behaviour, State) ->
@@ -123,5 +134,10 @@ parse_tag(<<"/>", _/binary>>, Behaviour, State, TagName) ->
     Tag = lists:reverse(TagName),
     {ok, NewState} = Behaviour:start_element(Tag, [], State),
     Behaviour:end_element(Tag, NewState);
+parse_tag(<<C, _/binary>>, _, _, "") when ?is_whitespace(C) ->
+    {error, notag};
+parse_tag(<<C, Tail/binary>>, Behaviour, State, TagName)
+        when ?is_whitespace(C) ->
+    parse_tag(Tail, Behaviour, State, TagName);
 parse_tag(<<C, Tail/binary>>, Behaviour, State, TagName) ->
     parse_tag(Tail, Behaviour, State, [C | TagName]).

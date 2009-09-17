@@ -64,10 +64,14 @@ characters(Chunk, State) ->
 
 test_simple_xml() ->
     {error, nodata} = xml:parse(<<>>, ?MODULE, []),
-    {eof, [{end_document},
+    {ok, [{end_document},
         {end_element, "tag"},
         {start_element, "tag", []},
         {start_document}]} = xml:parse(<<"<tag/>">>, ?MODULE, []),
+    {ok, [{end_document},
+        {end_element, "tag"},
+        {start_element, "tag", []},
+        {start_document}]} = xml:parse(<<"<tag />">>, ?MODULE, []),
     ok.
 
 
