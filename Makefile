@@ -27,7 +27,9 @@
 
 all: compile
 
-compile: $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
+compile: behaviours $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
+
+behaviours: ebin/http_client.beam ebin/xml.beam
 
 ebin/%.beam: src/%.erl
 	erlc -Wall -I include -pa ebin -o ebin/ $<

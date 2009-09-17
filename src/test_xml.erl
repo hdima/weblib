@@ -25,37 +25,52 @@
 %% ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 %% POSSIBILITY OF SUCH DAMAGE.
 %%
-%% @doc Library tests
+%% @doc Tests for relaxed XML module
 %%
--module(test_newslib).
--export([test/0, generate_docs/0]).
+-module(test_xml).
+
+-export([test/0]).
+
+-behaviour(xml).
+
+%% Behaviour callbacks
+-export([start_document/1, end_document/1, start_element/3, end_element/2,
+    characters/2]).
 
 
 %%
-%% @doc Run all test in the library
+%% Behaviour callbacks
 %%
-test() ->
-    test([
-        test_url,
-        test_http_client,
-        test_xml
-    ]).
 
-test([Module | Modules]) ->
-    io:format("~p: ", [Module]),
-    try Module:test() of
-        _ ->
-            io:format("OK~n")
-    catch _:Error ->
-        io:format("ERROR: ~p: ~p~n", [Error, erlang:get_stacktrace()])
-    end,
-    test(Modules);
-test([]) ->
+start_document(Args) ->
+    {ok, [{start_document} | Args]}.
+
+end_document(State) ->
+    {ok, [{end_document} | State]}.
+
+start_element(Tag, Attributes, State) ->
+    {ok, [{start_element, Tag, Attributes} | State]}.
+
+end_element(Tag, State) ->
+    {ok, [{end_element, Tag} | State]}.
+
+characters(Chunk, State) ->
+    {ok, [{characters, Chunk} | State]}.
+
+
+%%
+%% Tests
+%%
+
+test_simple_xml() ->
+    {error, nodata} = xml:parse(<<>>, ?MODULE, []),
+    {eof, [{end_document},
+        {end_element, "tag"},
+        {start_element, "tag", []},
+        {start_document}]} = xml:parse(<<"<tag/>">>, ?MODULE, []),
     ok.
 
 
-%%
-%% @doc Generate documentation for the library
-%%
-generate_docs() ->
-    edoc:application(newslib, "src", []).
+test() ->
+    test_simple_xml(),
+    ok.
