@@ -57,7 +57,7 @@
 %%
 -module(xml).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.4").
+-vsn("0.1").
 
 %% Public interface
 -export([parse/3, parse/2]).
@@ -133,17 +133,18 @@ start_parse(Chunk, Behaviour, State) ->
 
 
 parse_element(<<"<", Tail/binary>>, Behaviour, State) ->
-    parse_tag(Tail, Behaviour, State, []).
+    parse_tag(Tail, Behaviour, State, <<>>).
 
 
-parse_tag(<<"/>", _/binary>>, Behaviour, State, TagName) ->
-    Tag = lists:reverse(TagName),
-    {ok, NewState} = Behaviour:start_element(Tag, [], State),
-    Behaviour:end_element(Tag, NewState);
-parse_tag(<<C, _/binary>>, _, _, "") when ?is_whitespace(C) ->
+parse_tag(<<"/>", _/binary>>, Behaviour, State, Tag) ->
+    % TODO: Need to decode bytes
+    TagStr = binary_to_list(Tag),
+    {ok, NewState} = Behaviour:start_element(TagStr, [], State),
+    Behaviour:end_element(TagStr, NewState);
+parse_tag(<<C, _/binary>>, _, _, <<>>) when ?is_whitespace(C) ->
     {error, notag};
-parse_tag(<<C, Tail/binary>>, Behaviour, State, TagName)
+parse_tag(<<C, Tail/binary>>, Behaviour, State, Tag)
         when ?is_whitespace(C) ->
-    parse_tag(Tail, Behaviour, State, TagName);
-parse_tag(<<C, Tail/binary>>, Behaviour, State, TagName) ->
-    parse_tag(Tail, Behaviour, State, [C | TagName]).
+    parse_tag(Tail, Behaviour, State, Tag);
+parse_tag(<<C, Tail/binary>>, Behaviour, State, Tag) ->
+    parse_tag(Tail, Behaviour, State, <<Tag/binary,C>>).
