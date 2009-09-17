@@ -69,6 +69,7 @@ get_trace(Chunk, Behaviour, Args) ->
 
 test_simple_xml() ->
     {error, nodata} = xml:parse(<<>>, ?MODULE, []),
+    {error, notag} = xml:parse(<<"< tag/>">>, ?MODULE, []),
     [{start_document},
         {start_element, "tag", []},
         {end_element, "tag"},

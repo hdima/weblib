@@ -122,8 +122,14 @@ parse(Chunk, DocId) when is_binary(Chunk) ->
 
 
 start_parse(Chunk, Behaviour, State) ->
-    {ok, NewsState} = parse_element(Chunk, Behaviour, State),
-    Behaviour:end_document(NewsState).
+    case parse_element(Chunk, Behaviour, State) of
+        {ok, NewState} ->
+            Behaviour:end_document(NewState);
+        {stop, NewState} ->
+            {stop, NewState};
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 
 parse_element(<<"<", Tail/binary>>, Behaviour, State) ->
