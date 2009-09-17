@@ -142,7 +142,7 @@ parse_tag(<<"/>", _/binary>>, Behaviour, State, Tag) ->
     {ok, NewState} = Behaviour:start_element(TagStr, [], State),
     Behaviour:end_element(TagStr, NewState);
 parse_tag(<<C, _/binary>>, _, _, <<>>) when ?is_whitespace(C) ->
-    {error, notag};
+    {error, badtag};
 parse_tag(<<C, Tail/binary>>, Behaviour, State, Tag)
         when ?is_whitespace(C) ->
     parse_tag(Tail, Behaviour, State, Tag);
