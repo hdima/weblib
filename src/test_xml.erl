@@ -62,16 +62,21 @@ characters(Chunk, State) ->
 %% Tests
 %%
 
+get_trace(Chunk, Behaviour, Args) ->
+    {ok, Trace} = xml:parse(Chunk, Behaviour, Args),
+    lists:reverse(Trace).
+
+
 test_simple_xml() ->
     {error, nodata} = xml:parse(<<>>, ?MODULE, []),
-    {ok, [{end_document},
-        {end_element, "tag"},
+    [{start_document},
         {start_element, "tag", []},
-        {start_document}]} = xml:parse(<<"<tag/>">>, ?MODULE, []),
-    {ok, [{end_document},
         {end_element, "tag"},
+        {end_document}] = get_trace(<<"<tag/>">>, ?MODULE, []),
+    [{start_document},
         {start_element, "tag", []},
-        {start_document}]} = xml:parse(<<"<tag />">>, ?MODULE, []),
+        {end_element, "tag"},
+        {end_document}] = get_trace(<<"<tag />">>, ?MODULE, []),
     ok.
 
 
