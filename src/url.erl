@@ -29,7 +29,7 @@
 %%
 -module(url).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.2").
+-vsn("0.3").
 
 -export([urlsplit/1]).
 
@@ -53,7 +53,7 @@ urlsplit(Url) ->
             Scheme = parse_scheme(string:to_lower(S)),
             {Scheme, NetLoc, parse_port(P, Scheme), get_path(Path)};
         _Other ->
-            exit(bad_url)
+            erlang:error(bad_url, [Url])
     end.
 
 %%
@@ -65,8 +65,8 @@ parse_scheme("http") ->
     http;
 parse_scheme("https") ->
     https;
-parse_scheme(_) ->
-    exit(bad_scheme).
+parse_scheme(Scheme) ->
+    erlang:error(bad_url_scheme, [Scheme]).
 
 %%
 %% @doc Parse port
@@ -79,7 +79,7 @@ parse_port(Port, _Scheme) ->
     try list_to_integer(Port)
     catch
         error:badarg ->
-            exit(bad_port)
+            erlang:error(bad_url_port, [Port])
     end.
 
 %%

@@ -69,9 +69,9 @@ test_urlsplit_https() ->
 
 
 test_urlsplit_errors() ->
-    {'EXIT', bad_url} = (catch url:urlsplit("")),
-    {'EXIT', bad_scheme} = (catch url:urlsplit("ftp://ftp.host/")),
-    {'EXIT', bad_port} = (catch url:urlsplit("http://web.host:port")),
+    {'EXIT', {bad_url, _}} = (catch url:urlsplit("")),
+    {'EXIT', {bad_url_scheme, _}} = (catch url:urlsplit("ftp://ftp.host/")),
+    {'EXIT', {bad_url_port, _}} = (catch url:urlsplit("http://web.host:port")),
     ok.
 
 
