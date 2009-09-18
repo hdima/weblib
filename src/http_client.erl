@@ -40,7 +40,7 @@
 %%
 %%      handle_body(Chunk, State) -> Result
 %%          Chunk = binary() | eof | closed
-%%          Result = {ok, NewState} | {stop, State} | ok
+%%          Result = {ok, NewState} | {stop, State}
 %%
 -module(http_client).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
@@ -68,7 +68,7 @@ behaviour_info(_Other) ->
 
 %%
 %% @doc Send HTTP request
-%% @spec http_request(Method, Url, Headers, Behaviour, Args) -> Result
+%% @spec http_request(Method, Url, Headers, Behaviour, Args) -> ok
 %%      Method = 'GET' | 'HEAD'
 %%      Url = string()
 %%      Headers = [{Key, Value} | ...]
@@ -76,14 +76,13 @@ behaviour_info(_Other) ->
 %%      Value = binary()
 %%      Behaviour = atom()
 %%      Args = term()
-%%      Result = ok
 %%
 http_request(Method, Url, Headers, Behaviour, Args) ->
     http_connect(url:urlsplit(Url), Headers, Method, Behaviour, Args),
     ok.
 
 
-http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->
+http_connect({http, Host, Port, _}=Url, Headers, Method, Behaviour, Args) ->
     Options = [
         {active, false},
         binary,
@@ -95,18 +94,24 @@ http_connect({http, Host, Port, Path}, Headers, Method, Behaviour, Args) ->
     ],
     case gen_tcp:connect(Host, Port, Options, ?CONNECT_TIMEOUT) of
         {ok, Sock} ->
-            Request = create_request(Method, Path,
-                http_headers(Headers, {http, Host, Port}, [])),
-            case gen_tcp:send(Sock, Request) of
-                ok ->
-                    Result = recv_response(Sock, Method, Behaviour, Args),
-                    gen_tcp:close(Sock),
-                    Result;
-                Error ->
-                    Error
+            try send_request(Sock, Url, Headers, Method, Behaviour, Args)
+            after
+                gen_tcp:close(Sock)
             end;
-        Error ->
-            Error
+        {error, Reason} ->
+            erlang:error(http_connect_error, [Reason])
+    end.
+
+
+send_request(Sock, {http, Host, Port, Path},
+        Headers, Method, Behaviour, Args) ->
+    Request = create_request(Method, Path,
+        http_headers(Headers, {http, Host, Port}, [])),
+    case gen_tcp:send(Sock, Request) of
+        ok ->
+            recv_response(Sock, Method, Behaviour, Args);
+        {error, Reason} ->
+            erlang:error(http_send_error, [Reason])
     end.
 
 
@@ -169,28 +174,23 @@ format_headers([{Key, Value} | Headers], Data) ->
 %%      Args = term()
 %%
 recv_response(Sock, Method, Behaviour, Args) ->
-    case recv_headers(Sock, none, [], unknown) of
-        {ok, {_, S, _}=Status, Headers, Size} ->
-            case Behaviour:handle_headers(Method, Status, Headers, Args) of
-                {ok, State} ->
-                    case Method of
-                        'HEAD' ->
-                            % Ignore body per RFC2616
-                            Behaviour:handle_body(eof, State);
-                        _ when S < 200; S =:= 204; S =:= 304 ->
-                            % Ignore body per RFC2616
-                            Behaviour:handle_body(eof, State);
-                        _ ->
-                            inet:setopts(Sock, [{packet, raw}]),
-                            recv_data(Sock, Size, Behaviour, State)
-                    end;
-                {stop, State} ->
+    {Status, Headers, Size} = recv_headers(Sock, none, [], unknown), 
+    case Behaviour:handle_headers(Method, Status, Headers, Args) of
+        {ok, State} ->
+            {_, S, _} = Status,
+            case Method of
+                'HEAD' ->
+                    % Ignore body per RFC2616
                     Behaviour:handle_body(eof, State);
-                Error ->
-                    Error
+                _ when S < 200; S =:= 204; S =:= 304 ->
+                    % Ignore body per RFC2616
+                    Behaviour:handle_body(eof, State);
+                _ ->
+                    inet:setopts(Sock, [{packet, raw}]),
+                    recv_data(Sock, Size, Behaviour, State)
             end;
-        Error ->
-            Error
+        {stop, State} ->
+            Behaviour:handle_body(eof, State)
     end.
 
 recv_headers(Sock, HTTPHeader, Headers, Size) ->
@@ -204,12 +204,11 @@ recv_headers(Sock, HTTPHeader, Headers, Size) ->
         {ok, {http_header, _, Name, _, Value}} ->
             recv_headers(Sock, HTTPHeader, [{Name, Value} | Headers], Size);
         {ok, http_eoh} ->
-            {ok, HTTPHeader, lists:reverse(Headers), Size};
+            {HTTPHeader, lists:reverse(Headers), Size};
         {ok, {http_error, Reason}} ->
-            % TODO: Return different result?
-            {error, Reason};
-        Error ->
-            Error
+            erlang:error(http_error, [Reason]);
+        {error, Reason} ->
+            erlang:error(http_receive_error, [Reason])
     end.
 
 recv_data(_Sock, 0, Behaviour, State) ->
@@ -227,17 +226,17 @@ recv_data(Sock, Size, Behaviour, State) ->
                             recv_data(Sock, S, Behaviour, NewState)
                     end;
                 {stop, State} ->
-                    Behaviour:handle_body(eof, State);
-                Error ->
-                    Error
+                    Behaviour:handle_body(eof, State)
             end;
         {error, closed} ->
             case Size of
                 unknown ->
                     Behaviour:handle_body(eof, State);
                 _ ->
-                    Behaviour:handle_body(closed, State)
+                    Behaviour:handle_body(closed, State),
+                    erlang:error(http_receive_error, [closed])
             end;
-        Error ->
-            Error
+        {error, Reason} ->
+            Behaviour:handle_body(closed, State),
+            erlang:error(http_receive_error, [Reason])
     end.
