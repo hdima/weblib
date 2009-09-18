@@ -75,11 +75,11 @@ parse_port("", http) ->
     80;
 parse_port("", https) ->
     443;
-parse_port(Port, _Scheme) ->
+parse_port(Port, Scheme) ->
     try list_to_integer(Port)
     catch
         error:badarg ->
-            erlang:error(bad_url_port, [Port])
+            erlang:error(bad_url_port, [Port, Scheme])
     end.
 
 %%
