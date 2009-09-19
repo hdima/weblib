@@ -31,7 +31,7 @@
 %%
 %%      start_document(Args) -> Result
 %%          Args = term()
-%%          Result = {ok, State} | {stop, State} | {error, Reason}
+%%          Result = {ok, State}
 %%
 %%      end_document(State) -> Result
 %%          State = term()
@@ -91,20 +91,14 @@ behaviour_info(_Other) ->
 %%      Chunk = binary()
 %%      Behaviour = atom()
 %%      Args = term()
-%%      Result = {continue, DocId} | {ok, State} | {error, Reason}
+%%      Result = {continue, DocId} | {ok, State}
 %%      DocId = term()
 %%
 parse(<<>>, _, _) ->
-    {error, nodata};
+    erlang:error(xml_nodata);
 parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
-    case Behaviour:start_document(Args) of
-        {ok, State} ->
-            start_parse(Chunk, Behaviour, State);
-        {stop, State} ->
-            {ok, State};
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    {ok, State} = Behaviour:start_document(Args),
+    start_parse(Chunk, Behaviour, State).
 
 
 %%
@@ -112,7 +106,7 @@ parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
 %% @spec parse(Chunk, DocId) -> Result
 %%      Chunk = binary() | eof
 %%      DocId = term()
-%%      Result = {continue, DocId} | {ok, State) | {error, Reason}
+%%      Result = {continue, DocId} | {ok, State)
 %%      Reason = term()
 %%
 parse(eof, DocId) ->
@@ -122,14 +116,8 @@ parse(Chunk, DocId) when is_binary(Chunk) ->
 
 
 start_parse(Chunk, Behaviour, State) ->
-    case parse_element(Chunk, Behaviour, State) of
-        {ok, NewState} ->
-            Behaviour:end_document(NewState);
-        {stop, NewState} ->
-            {stop, NewState};
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    {ok, NewState} = parse_element(Chunk, Behaviour, State),
+    Behaviour:end_document(NewState).
 
 
 parse_element(<<"<", Tail/binary>>, Behaviour, State) ->
@@ -142,7 +130,7 @@ parse_tag(<<"/>", _/binary>>, Behaviour, State, Tag) ->
     {ok, NewState} = Behaviour:start_element(TagStr, [], State),
     Behaviour:end_element(TagStr, NewState);
 parse_tag(<<C, _/binary>>, _, _, <<>>) when ?is_whitespace(C) ->
-    {error, badtag};
+    erlang:error(xml_badtag);
 parse_tag(<<C, Tail/binary>>, Behaviour, State, Tag)
         when ?is_whitespace(C) ->
     parse_tag(Tail, Behaviour, State, Tag);
