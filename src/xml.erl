@@ -68,6 +68,7 @@
 
 -record(state, {
     tail,
+    stack=[],
     behaviour,
     state
     }).
@@ -98,7 +99,8 @@ parse(<<>>, _, _) ->
     erlang:error(xml_nodata);
 parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
     {ok, State} = Behaviour:start_document(Args),
-    start_parse(Chunk, Behaviour, State).
+    Info = #state{behaviour=Behaviour, state=State},
+    start_parse(Chunk, Info).
 
 
 %%
@@ -115,24 +117,27 @@ parse(Chunk, DocId) when is_binary(Chunk) ->
     {continue, DocId}.
 
 
-start_parse(Chunk, Behaviour, State) ->
-    {ok, NewState} = parse_element(Chunk, Behaviour, State),
-    Behaviour:end_document(NewState).
+start_parse(Chunk, Info) ->
+    Info2 = parse_element(Chunk, Info),
+    (Info2#state.behaviour):end_document(Info2#state.state).
 
 
-parse_element(<<"<", Tail/binary>>, Behaviour, State) ->
-    parse_tag(Tail, Behaviour, State, <<>>).
+parse_element(<<"<", Tail/binary>>, Info) ->
+    case parse_tag(Tail, <<>>) of
+        {start_stop, Tag, _Headers, _Chunk} ->
+            B = Info#state.behaviour,
+            {ok, State2} = B:start_element(Tag, [], Info#state.state),
+            {ok, State3} = B:end_element(Tag, State2),
+            Info#state{state=State3}
+    end.
 
 
-parse_tag(<<"/>", _/binary>>, Behaviour, State, Tag) ->
+parse_tag(<<"/>", Tail/binary>>, Tag) ->
     % TODO: Need to decode bytes
-    TagStr = binary_to_list(Tag),
-    {ok, NewState} = Behaviour:start_element(TagStr, [], State),
-    Behaviour:end_element(TagStr, NewState);
-parse_tag(<<C, _/binary>>, _, _, <<>>) when ?is_whitespace(C) ->
+    {start_stop, binary_to_list(Tag), [], Tail};
+parse_tag(<<C, _/binary>>, <<>>) when ?is_whitespace(C) ->
     erlang:error(xml_badtag);
-parse_tag(<<C, Tail/binary>>, Behaviour, State, Tag)
-        when ?is_whitespace(C) ->
-    parse_tag(Tail, Behaviour, State, Tag);
-parse_tag(<<C, Tail/binary>>, Behaviour, State, Tag) ->
-    parse_tag(Tail, Behaviour, State, <<Tag/binary,C>>).
+parse_tag(<<C, Tail/binary>>, Tag) when ?is_whitespace(C) ->
+    parse_tag(Tail, Tag);
+parse_tag(<<C, Tail/binary>>, Tag) ->
+    parse_tag(Tail, <<Tag/binary,C>>).
