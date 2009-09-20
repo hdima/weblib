@@ -123,21 +123,43 @@ start_parse(Chunk, Info) ->
 
 
 parse_element(<<"<", Tail/binary>>, Info) ->
-    case parse_tag(Tail, <<>>) of
-        {start_stop, Tag, _Headers, _Chunk} ->
+    case parse_tag(Tail, <<>>, [], tag) of
+        {start_stop, Tag, Headers, _Chunk} ->
             B = Info#state.behaviour,
-            {ok, State2} = B:start_element(Tag, [], Info#state.state),
-            {ok, State3} = B:end_element(Tag, State2),
-            Info#state{state=State3}
+            {ok, State} = B:start_element(Tag, Headers, Info#state.state),
+            {ok, State2} = B:end_element(Tag, State),
+            Info#state{state=State2}
     end.
 
 
-parse_tag(<<"/>", Tail/binary>>, Tag) ->
+parse_tag(<<"/>", Tail/binary>>, Tag, Headers, _) ->
     % TODO: Need to decode bytes
-    {start_stop, binary_to_list(Tag), [], Tail};
-parse_tag(<<C, _/binary>>, <<>>) when ?is_whitespace(C) ->
+    {start_stop, binary_to_list(Tag), lists:reverse(Headers), Tail};
+parse_tag(<<C, _/binary>>, <<>>, [], tag) when ?is_whitespace(C) ->
     erlang:error(xml_badtag);
-parse_tag(<<C, Tail/binary>>, Tag) when ?is_whitespace(C) ->
-    parse_tag(Tail, Tag);
-parse_tag(<<C, Tail/binary>>, Tag) ->
-    parse_tag(Tail, <<Tag/binary,C>>).
+parse_tag(<<C, Tail/binary>>, Tag, Headers, tag) when ?is_whitespace(C) ->
+    parse_tag(Tail, Tag, Headers, attr);
+parse_tag(<<C, Tail/binary>>, Tag, Headers, attr) when ?is_whitespace(C) ->
+    parse_tag(Tail, Tag, Headers, attr);
+parse_tag(Chunk, Tag, Headers, attr) ->
+    {N, V, T} = parse_attribute(Chunk, <<>>, <<>>, name),
+    parse_tag(T, Tag, [{N, V} | Headers], attr);
+parse_tag(<<C, Tail/binary>>, Tag, Headers, tag) ->
+    parse_tag(Tail, <<Tag/binary, C>>, Headers, tag).
+
+
+parse_attribute(<<"/>", _/binary>>, _, _, _) ->
+    erlang:error(xml_badattr);
+parse_attribute(<<"=", _/binary>>, <<>>, <<>>, name) ->
+    erlang:error(xml_badattr);
+parse_attribute(<<"=", Tail/binary>>, Name, <<>>, name) ->
+    parse_attribute(Tail, Name, <<>>, eq);
+parse_attribute(<<C, Tail/binary>>, Name, <<>>, name) ->
+    parse_attribute(Tail, <<Name/binary, C>>, <<>>, name);
+parse_attribute(<<C, Tail/binary>>, Name, <<>>, eq) when C =:= $'; C =:= $" ->
+    parse_attribute(Tail, Name, <<>>, {value, C});
+parse_attribute(<<Q, Tail/binary>>, Name, Value, {value, Q}) ->
+    % TODO: Need to decode bytes
+    {binary_to_list(Name), binary_to_list(Value), Tail};
+parse_attribute(<<C, Tail/binary>>, Name, Value, {value, Q}) ->
+    parse_attribute(Tail, Name, <<Value/binary, C>>, {value, Q}).

@@ -70,6 +70,11 @@ get_trace(Chunk, Behaviour, Args) ->
 test_errors() ->
     {'EXIT', {xml_nodata, _}} = (catch xml:parse(<<>>, ?MODULE, [])),
     {'EXIT', {xml_badtag, _}} = (catch xml:parse(<<"< tag/>">>, ?MODULE, [])),
+    {'EXIT', {xml_badattr, _}} = (catch xml:parse(<<"<tag =/>">>, ?MODULE, [])),
+    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
+        <<"<tag name/>">>, ?MODULE, [])),
+    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
+        <<"<tag name name=/>">>, ?MODULE, [])),
     ok.
 
 
@@ -82,6 +87,15 @@ test_simple_xml() ->
         {start_element, "tag", []},
         {end_element, "tag"},
         {end_document}] = get_trace(<<"<tag />">>, ?MODULE, []),
+    [{start_document},
+        {start_element, "tag", [{"name", "value"}]},
+        {end_element, "tag"},
+        {end_document}] = get_trace(<<"<tag name='value'/>">>, ?MODULE, []),
+    %[{start_document},
+    %    {start_element, "tag", [{"name", " value "}]},
+    %    {end_element, "tag"},
+    %    {end_document}] = get_trace(
+    %        <<"<tag name = ' value ' />">>, ?MODULE, []),
     ok.
 
 
