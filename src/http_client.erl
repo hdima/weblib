@@ -78,8 +78,13 @@ behaviour_info(_Other) ->
 %%      Args = term()
 %%
 http_request(Method, Url, Headers, Behaviour, Args) ->
-    http_connect(url:urlsplit(Url), Headers, Method, Behaviour, Args),
-    ok.
+    try
+        http_connect(url:urlsplit(Url), Headers, Method, Behaviour, Args),
+        ok
+    catch
+        throw:stop ->
+            ok
+    end.
 
 
 http_connect({http, Host, Port, _}=Url, Headers, Method, Behaviour, Args) ->
@@ -190,7 +195,8 @@ recv_response(Sock, Method, Behaviour, Args) ->
                     recv_data(Sock, Size, Behaviour, State)
             end;
         {stop, State} ->
-            Behaviour:handle_body(eof, State)
+            Behaviour:handle_body(eof, State),
+            throw(stop)
     end.
 
 recv_headers(Sock, HTTPHeader, Headers, Size) ->
@@ -226,7 +232,8 @@ recv_data(Sock, Size, Behaviour, State) ->
                             recv_data(Sock, S, Behaviour, NewState)
                     end;
                 {stop, State} ->
-                    Behaviour:handle_body(eof, State)
+                    Behaviour:handle_body(eof, State),
+                    throw(stop)
             end;
         {error, closed} ->
             case Size of
