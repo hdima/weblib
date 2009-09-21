@@ -37,6 +37,8 @@
 -export([start_document/1, end_document/1, start_element/3, end_element/2,
     characters/2]).
 
+-include("xml.hrl").
+
 
 %%
 %% Behaviour callbacks
@@ -61,6 +63,34 @@ characters(Chunk, State) ->
 %%
 %% Tests
 %%
+
+get_char_type(C) when ?is_whitespace(C) ->
+    whitespace;
+get_char_type(C) when ?is_namestartchar(C) ->
+    namestartchar;
+get_char_type(C) when ?is_namechar(C) ->
+    namechar;
+get_char_type(_) ->
+    other.
+
+
+test_constants() ->
+    whitespace = get_char_type(16#20),
+    whitespace = get_char_type(16#9),
+    whitespace = get_char_type(16#D),
+    whitespace = get_char_type(16#A),
+    namestartchar = get_char_type($:),
+    namestartchar = get_char_type($_),
+    namestartchar = get_char_type($a),
+    namestartchar = get_char_type($z),
+    namestartchar = get_char_type($A),
+    namestartchar = get_char_type($Z),
+    namechar = get_char_type($-),
+    namechar = get_char_type($.),
+    namechar = get_char_type($0),
+    namechar = get_char_type($9),
+    ok.
+
 
 get_trace(Chunk, Behaviour, Args) ->
     {ok, Trace} = xml:parse(Chunk, Behaviour, Args),
@@ -100,6 +130,7 @@ test_simple_xml() ->
 
 
 test() ->
+    test_constants(),
     test_errors(),
     test_simple_xml(),
     ok.

@@ -25,7 +25,7 @@
 %% ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 %% POSSIBILITY OF SUCH DAMAGE.
 %%
-%% @doc Relaxed XML parser
+%% @doc Relaxed parser for a subset of XML
 %%
 %% Callbak module interface:
 %%
@@ -65,15 +65,15 @@
 %% Behaviour information
 -export([behaviour_info/1]).
 
+-include("xml.hrl").
 
+%% Parser state
 -record(state, {
     tail,
     stack=[],
     behaviour,
     state
     }).
-
--define(is_whitespace(C), C =:= 16#20; C =:= 16#9; C =:= 16#D; C =:= 16#A).
 
 
 %%
