@@ -1,3 +1,11 @@
+XML parser
+----------
+
+- Return line number and char for all errors
+
+- Pass location info to callback methods
+
+
 FeedParser
 ----------
 

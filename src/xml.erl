@@ -132,6 +132,8 @@ parse_element(<<"<", Tail/binary>>, Info) ->
     end.
 
 
+parse_tag(<<"/>", _/binary>>, <<>>, _, tag) ->
+    erlang:error(xml_badtag);
 parse_tag(<<"/>", Tail/binary>>, Tag, Headers, _) ->
     % TODO: Need to decode bytes
     {start_stop, binary_to_list(Tag), lists:reverse(Headers), Tail};
@@ -144,8 +146,12 @@ parse_tag(<<C, Tail/binary>>, Tag, Headers, attr) when ?is_whitespace(C) ->
 parse_tag(Chunk, Tag, Headers, attr) ->
     {N, V, T} = parse_attribute(Chunk, <<>>, <<>>, name),
     parse_tag(T, Tag, [{N, V} | Headers], attr);
-parse_tag(<<C, Tail/binary>>, Tag, Headers, tag) ->
-    parse_tag(Tail, <<Tag/binary, C>>, Headers, tag).
+parse_tag(<<C, Tail/binary>>, <<>>, Headers, tag) when ?is_namestartchar(C) ->
+    parse_tag(Tail, <<C>>, Headers, tag);
+parse_tag(<<C, Tail/binary>>, Tag, Headers, tag) when ?is_namechar(C) ->
+    parse_tag(Tail, <<Tag/binary, C>>, Headers, tag);
+parse_tag(_, _, _, tag) ->
+    erlang:error(xml_badtag).
 
 
 parse_attribute(<<"/>", _/binary>>, _, _, _) ->
