@@ -70,6 +70,8 @@ get_char_type(C) when ?is_namestartchar(C) ->
     namestartchar;
 get_char_type(C) when ?is_namechar(C) ->
     namechar;
+get_char_type(C) when ?is_attrvaluechar(C, "'") ->
+    attrvaluechar;
 get_char_type(_) ->
     other.
 
@@ -89,6 +91,7 @@ test_constants() ->
     namechar = get_char_type($.),
     namechar = get_char_type($0),
     namechar = get_char_type($9),
+    attrvaluechar = get_char_type($?),
     ok.
 
 

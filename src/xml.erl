@@ -160,12 +160,20 @@ parse_attribute(<<"=", _/binary>>, <<>>, <<>>, name) ->
     erlang:error(xml_badattr);
 parse_attribute(<<"=", Tail/binary>>, Name, <<>>, name) ->
     parse_attribute(Tail, Name, <<>>, eq);
-parse_attribute(<<C, Tail/binary>>, Name, <<>>, name) ->
+parse_attribute(<<C, Tail/binary>>, <<>>, <<>>, name)
+        when ?is_namestartchar(C) ->
+    parse_attribute(Tail, <<C>>, <<>>, name);
+parse_attribute(<<C, Tail/binary>>, Name, <<>>, name) when ?is_namechar(C) ->
     parse_attribute(Tail, <<Name/binary, C>>, <<>>, name);
+parse_attribute(_, _, <<>>, name) ->
+    erlang:error(xml_badattr);
 parse_attribute(<<C, Tail/binary>>, Name, <<>>, eq) when C =:= $'; C =:= $" ->
     parse_attribute(Tail, Name, <<>>, {value, C});
 parse_attribute(<<Q, Tail/binary>>, Name, Value, {value, Q}) ->
     % TODO: Need to decode bytes
     {binary_to_list(Name), binary_to_list(Value), Tail};
-parse_attribute(<<C, Tail/binary>>, Name, Value, {value, Q}) ->
-    parse_attribute(Tail, Name, <<Value/binary, C>>, {value, Q}).
+parse_attribute(<<C, Tail/binary>>, Name, Value, {value, Q})
+        when ?is_attrvaluechar(C, Q) ->
+    parse_attribute(Tail, Name, <<Value/binary, C>>, {value, Q});
+parse_attribute(_, _, _, {value, _}) ->
+    erlang:error(xml_badattr).
