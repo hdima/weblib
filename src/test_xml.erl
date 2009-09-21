@@ -109,6 +109,8 @@ test_errors() ->
         <<"<tag name/>">>, ?MODULE, [])),
     {'EXIT', {xml_badattr, _}} = (catch xml:parse(
         <<"<tag name name=/>">>, ?MODULE, [])),
+    %{'EXIT', {xml_badattr, _}} = (catch xml:parse(
+    %    <<"<tag n1='v1'n2='v2'/>">>, ?MODULE, [])),
     ok.
 
 
@@ -130,6 +132,11 @@ test_simple_xml() ->
         {end_element, "tag"},
         {end_document}] = get_trace(
             <<"<tag name = ' value ' />">>, ?MODULE, []),
+    [{start_document},
+        {start_element, "tag", [{"n1", "v1"}, {"n2", "v2"}]},
+        {end_element, "tag"},
+        {end_document}] = get_trace(
+            <<"<tag n1='v1' n2='v2' />">>, ?MODULE, []),
     ok.
 
 
