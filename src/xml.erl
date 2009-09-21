@@ -165,9 +165,13 @@ parse_attribute(<<C, Tail/binary>>, <<>>, <<>>, name)
     parse_attribute(Tail, <<C>>, <<>>, name);
 parse_attribute(<<C, Tail/binary>>, Name, <<>>, name) when ?is_namechar(C) ->
     parse_attribute(Tail, <<Name/binary, C>>, <<>>, name);
+parse_attribute(<<C, Tail/binary>>, Name, <<>>, name) when ?is_whitespace(C) ->
+    parse_attribute(Tail, Name, <<>>, name);
 parse_attribute(_, _, <<>>, name) ->
     erlang:error(xml_badattr);
-parse_attribute(<<C, Tail/binary>>, Name, <<>>, eq) when C =:= $'; C =:= $" ->
+parse_attribute(<<C, Tail/binary>>, Name, <<>>, eq) when ?is_whitespace(C) ->
+    parse_attribute(Tail, Name, <<>>, eq);
+parse_attribute(<<C, Tail/binary>>, Name, <<>>, eq) when ?is_quote(C) ->
     parse_attribute(Tail, Name, <<>>, {value, C});
 parse_attribute(<<Q, Tail/binary>>, Name, Value, {value, Q}) ->
     % TODO: Need to decode bytes

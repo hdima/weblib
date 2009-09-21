@@ -125,11 +125,11 @@ test_simple_xml() ->
         {start_element, "tag", [{"name", "value"}]},
         {end_element, "tag"},
         {end_document}] = get_trace(<<"<tag name='value'/>">>, ?MODULE, []),
-    %[{start_document},
-    %    {start_element, "tag", [{"name", " value "}]},
-    %    {end_element, "tag"},
-    %    {end_document}] = get_trace(
-    %        <<"<tag name = ' value ' />">>, ?MODULE, []),
+    [{start_document},
+        {start_element, "tag", [{"name", " value "}]},
+        {end_element, "tag"},
+        {end_document}] = get_trace(
+            <<"<tag name = ' value ' />">>, ?MODULE, []),
     ok.
 
 
