@@ -118,66 +118,72 @@ parse(Chunk, DocId) when is_binary(Chunk) ->
 
 
 start_parse(Chunk, Info) ->
-    Info2 = parse_element(Chunk, Info),
+    % TODO: Return Tail
+    {Info2, Tail} = parse_element(Chunk, Info),
     (Info2#state.behaviour):end_document(Info2#state.state).
 
 
 parse_element(<<"<", Tail/binary>>, Info) ->
-    case parse_tag(Tail, <<>>, [], tag) of
-        {start_stop, Tag, Headers, _Chunk} ->
-            B = Info#state.behaviour,
-            {ok, State} = B:start_element(Tag, Headers, Info#state.state),
-            {ok, State2} = B:end_element(Tag, State),
-            Info#state{state=State2}
+    case parse_name(Tail, <<>>) of
+        {"", Tail} ->
+            erlang:error(xml_badtag);
+        {Tag, Tail2} ->
+            {Attributes, Tail3} = parse_attributes(Tail2, []),
+            case skip_whitespace(Tail3) of
+                <<"/>", Tail4/binary>> ->
+                    B = Info#state.behaviour,
+                    {ok, State} = B:start_element(Tag, Attributes,
+                        Info#state.state),
+                    {ok, State2} = B:end_element(Tag, State),
+                    {Info#state{state=State2}, Tail4}
+            end
     end.
 
 
-parse_tag(<<"/>", _/binary>>, <<>>, _, tag) ->
-    erlang:error(xml_badtag);
-parse_tag(<<"/>", Tail/binary>>, Tag, Headers, _) ->
-    % TODO: Need to decode bytes
-    {start_stop, binary_to_list(Tag), lists:reverse(Headers), Tail};
-parse_tag(<<C, _/binary>>, <<>>, [], tag) when ?is_whitespace(C) ->
-    erlang:error(xml_badtag);
-parse_tag(<<C, Tail/binary>>, Tag, Headers, tag) when ?is_whitespace(C) ->
-    parse_tag(Tail, Tag, Headers, attr);
-parse_tag(<<C, Tail/binary>>, Tag, Headers, attr) when ?is_whitespace(C) ->
-    parse_tag(Tail, Tag, Headers, attr);
-parse_tag(Chunk, Tag, Headers, attr) ->
-    {N, V, T} = parse_attribute(Chunk, <<>>, <<>>, name),
-    parse_tag(T, Tag, [{N, V} | Headers], attr);
-parse_tag(<<C, Tail/binary>>, <<>>, Headers, tag) when ?is_namestartchar(C) ->
-    parse_tag(Tail, <<C>>, Headers, tag);
-parse_tag(<<C, Tail/binary>>, Tag, Headers, tag) when ?is_namechar(C) ->
-    parse_tag(Tail, <<Tag/binary, C>>, Headers, tag);
-parse_tag(_, _, _, tag) ->
-    erlang:error(xml_badtag).
+skip_whitespace(<<C, Tail/binary>>) when ?is_whitespace(C) ->
+    skip_whitespace(Tail);
+skip_whitespace(Tail) ->
+    Tail.
 
 
-parse_attribute(<<"/>", _/binary>>, _, _, _) ->
-    erlang:error(xml_badattr);
-parse_attribute(<<"=", _/binary>>, <<>>, <<>>, name) ->
-    erlang:error(xml_badattr);
-parse_attribute(<<"=", Tail/binary>>, Name, <<>>, name) ->
-    parse_attribute(Tail, Name, <<>>, eq);
-parse_attribute(<<C, Tail/binary>>, <<>>, <<>>, name)
-        when ?is_namestartchar(C) ->
-    parse_attribute(Tail, <<C>>, <<>>, name);
-parse_attribute(<<C, Tail/binary>>, Name, <<>>, name) when ?is_namechar(C) ->
-    parse_attribute(Tail, <<Name/binary, C>>, <<>>, name);
-parse_attribute(<<C, Tail/binary>>, Name, <<>>, name) when ?is_whitespace(C) ->
-    parse_attribute(Tail, Name, <<>>, name);
-parse_attribute(_, _, <<>>, name) ->
-    erlang:error(xml_badattr);
-parse_attribute(<<C, Tail/binary>>, Name, <<>>, eq) when ?is_whitespace(C) ->
-    parse_attribute(Tail, Name, <<>>, eq);
-parse_attribute(<<C, Tail/binary>>, Name, <<>>, eq) when ?is_quote(C) ->
-    parse_attribute(Tail, Name, <<>>, {value, C});
-parse_attribute(<<Q, Tail/binary>>, Name, Value, {value, Q}) ->
+parse_name(<<C, Tail/binary>>, <<>>) when ?is_namestartchar(C) ->
+    parse_name(Tail, <<C>>);
+parse_name(<<C, Tail/binary>>, Name) when ?is_namechar(C) ->
+    parse_name(Tail, <<Name/binary, C>>);
+parse_name(Tail, Name) ->
+    % TODO: Need to decode name
+    {binary_to_list(Name), Tail}.
+
+
+parse_attributes(Chunk, Attributes) ->
+    case skip_whitespace(Chunk) of
+        Chunk ->
+            {lists:reverse(Attributes), Chunk};
+        Tail ->
+            case parse_name(Tail, <<>>) of
+                {"", Tail} ->
+                    {lists:reverse(Attributes), Tail};
+                {Name, Tail2} ->
+                    Tail3 = parse_eq(Tail2),
+                    {Value, Tail4} = parse_value(Tail3, <<>>, none),
+                    parse_attributes(Tail4, [{Name, Value} | Attributes])
+            end
+    end.
+
+
+parse_eq(Chunk) ->
+    case skip_whitespace(Chunk) of
+        <<"=", Tail/binary>> ->
+            skip_whitespace(Tail);
+        _ ->
+            erlang:error(xml_badattr)
+    end.
+
+
+parse_value(<<C, Tail/binary>>, <<>>, none) when ?is_quote(C) ->
+    parse_value(Tail, <<>>, C);
+parse_value(<<Q, Tail/binary>>, Value, Q) ->
     % TODO: Need to decode bytes
-    {binary_to_list(Name), binary_to_list(Value), Tail};
-parse_attribute(<<C, Tail/binary>>, Name, Value, {value, Q})
-        when ?is_attrvaluechar(C, Q) ->
-    parse_attribute(Tail, Name, <<Value/binary, C>>, {value, Q});
-parse_attribute(_, _, _, {value, _}) ->
-    erlang:error(xml_badattr).
+    {binary_to_list(Value), Tail};
+parse_value(<<C, Tail/binary>>, Value, Q) ->
+    parse_value(Tail, <<Value/binary, C>>, Q).
