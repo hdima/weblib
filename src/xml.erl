@@ -135,7 +135,9 @@ parse_element(<<"<", Tail/binary>>, Info) ->
                     {ok, State} = B:start_element(Tag, Attributes,
                         Info#state.state),
                     {ok, State2} = B:end_element(Tag, State),
-                    {Info#state{state=State2}, Tail4}
+                    {Info#state{state=State2}, Tail4};
+                _ ->
+                    erlang:error(xml_badattr)
             end
     end.
 

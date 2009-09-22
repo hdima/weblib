@@ -104,13 +104,13 @@ test_errors() ->
     {'EXIT', {xml_nodata, _}} = (catch xml:parse(<<>>, ?MODULE, [])),
     {'EXIT', {xml_badtag, _}} = (catch xml:parse(<<"</>">>, ?MODULE, [])),
     {'EXIT', {xml_badtag, _}} = (catch xml:parse(<<"< tag/>">>, ?MODULE, [])),
-    %{'EXIT', {xml_badattr, _}} = (catch xml:parse(<<"<tag =/>">>, ?MODULE, [])),
-    %{'EXIT', {xml_badattr, _}} = (catch xml:parse(
-    %    <<"<tag name/>">>, ?MODULE, [])),
-    %{'EXIT', {xml_badattr, _}} = (catch xml:parse(
-    %    <<"<tag name name=/>">>, ?MODULE, [])),
-    %{'EXIT', {xml_badattr, _}} = (catch xml:parse(
-    %    <<"<tag n1='v1'n2='v2'/>">>, ?MODULE, [])),
+    {'EXIT', {xml_badattr, _}} = (catch xml:parse(<<"<tag =/>">>, ?MODULE, [])),
+    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
+        <<"<tag name/>">>, ?MODULE, [])),
+    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
+        <<"<tag name name=/>">>, ?MODULE, [])),
+    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
+        <<"<tag n1='v1'n2='v2'/>">>, ?MODULE, [])),
     ok.
 
 
