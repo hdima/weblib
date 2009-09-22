@@ -187,5 +187,7 @@ parse_value(<<C, Tail/binary>>, <<>>, none) when ?is_quote(C) ->
 parse_value(<<Q, Tail/binary>>, Value, Q) ->
     % TODO: Need to decode bytes
     {binary_to_list(Value), Tail};
-parse_value(<<C, Tail/binary>>, Value, Q) ->
-    parse_value(Tail, <<Value/binary, C>>, Q).
+parse_value(<<C, Tail/binary>>, Value, Q) when ?is_attrvaluechar(C, Q) ->
+    parse_value(Tail, <<Value/binary, C>>, Q);
+parse_value(_, _, _) ->
+    erlang:error(xml_badattr).
