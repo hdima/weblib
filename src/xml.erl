@@ -57,7 +57,7 @@
 %%
 -module(xml).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.1").
+-vsn("0.2").
 
 %% Public interface
 -export([parse/3, parse/2]).
@@ -118,27 +118,58 @@ parse(Chunk, DocId) when is_binary(Chunk) ->
 
 
 start_parse(Chunk, Info) ->
-    % TODO: Return Tail
-    {Info2, Tail} = parse_element(Chunk, Info),
-    (Info2#state.behaviour):end_document(Info2#state.state).
+    case parse_element(Chunk, Info) of
+        #state{stack=[]}=Info2 ->
+            (Info2#state.behaviour):end_document(Info2#state.state);
+        Info2 ->
+            {continue, Info2}
+    end.
 
 
+parse_element(<<>>, Info) ->
+    Info;
+parse_element(<<"</", Tail/binary>>, Info) ->
+    case parse_name(Tail, <<>>) of
+        {"", Tail} ->
+            erlang:error(xml_badtag);
+        {Tag, Tail2} ->
+            case skip_whitespace(Tail2) of
+                <<">", Tail3/binary>> ->
+                    B = Info#state.behaviour,
+                    {ok, State} = B:end_element(Tag, Info#state.state),
+                    % TODO: Check tag
+                    [Tag | Stack] = Info#state.stack,
+                    parse_element(Tail3, Info#state{state=State, stack=Stack});
+                _ ->
+                    erlang:error(xml_badtag)
+            end
+    end;
 parse_element(<<"<", Tail/binary>>, Info) ->
     case parse_name(Tail, <<>>) of
         {"", Tail} ->
             erlang:error(xml_badtag);
         {Tag, Tail2} ->
-            {Attributes, Tail3} = parse_attributes(Tail2, []),
-            case skip_whitespace(Tail3) of
-                <<"/>", Tail4/binary>> ->
-                    B = Info#state.behaviour,
-                    {ok, State} = B:start_element(Tag, Attributes,
-                        Info#state.state),
-                    {ok, State2} = B:end_element(Tag, State),
-                    {Info#state{state=State2}, Tail4};
-                _ ->
-                    erlang:error(xml_badattr)
-            end
+            continue_parsing(Tag, Tail2, Info)
+    end.
+
+
+continue_parsing(Tag, Tail, Info) ->
+    {Attributes, Tail2} = parse_attributes(Tail, []),
+    case skip_whitespace(Tail2) of
+        <<"/>", Tail3/binary>> ->
+            B = Info#state.behaviour,
+            {ok, State} = B:start_element(Tag, Attributes,
+                Info#state.state),
+            {ok, State2} = B:end_element(Tag, State),
+            parse_element(Tail3, Info#state{state=State2});
+        <<">", Tail3/binary>> ->
+            B = Info#state.behaviour,
+            {ok, State} = B:start_element(Tag, Attributes,
+                Info#state.state),
+            Stack = Info#state.stack,
+            parse_element(Tail3, Info#state{state=State, stack=[Tag | Stack]});
+        _ ->
+            erlang:error(xml_badattr)
     end.
 
 

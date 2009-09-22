@@ -7,5 +7,5 @@
     C =:= $:; C =:= $_; (C >= $a andalso C =< $z); (C >= $A andalso C =< $Z)).
 -define(is_namechar(C),
     ?is_namestartchar(C); C =:= $-; C =:= $.; (C >= $0 andalso C =< $9)).
--define(is_attrvaluechar(C, Q), C =/= $&, C =/= $<, C =/= Q).
+-define(is_attrvaluechar(C, Q), C =/= $<, C =/= Q).
 -define(is_quote(C), C =:= $'; C =:= $").

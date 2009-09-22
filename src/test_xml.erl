@@ -124,6 +124,18 @@ test_simple_xml() ->
         {end_element, "tag"},
         {end_document}] = get_trace(<<"<tag />">>, ?MODULE, []),
     [{start_document},
+        {start_element, "tag", []},
+        {end_element, "tag"},
+        {end_document}] = get_trace(<<"<tag></tag>">>, ?MODULE, []),
+    [{start_document},
+        {start_element, "tag", []},
+        {end_element, "tag"},
+        {end_document}] = get_trace(<<"<tag ></tag >">>, ?MODULE, []),
+    ok.
+
+
+test_simple_attributes() ->
+    [{start_document},
         {start_element, "tag", [{"name", "value"}]},
         {end_element, "tag"},
         {end_document}] = get_trace(<<"<tag name='value'/>">>, ?MODULE, []),
@@ -144,4 +156,5 @@ test() ->
     test_constants(),
     test_errors(),
     test_simple_xml(),
+    test_simple_attributes(),
     ok.
