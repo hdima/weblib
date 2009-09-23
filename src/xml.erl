@@ -69,7 +69,7 @@
 
 %% Parser state
 -record(state, {
-    tail,
+    tail=(<<>>),
     stack=[],
     behaviour,
     state
@@ -112,9 +112,11 @@ parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
 %%      Reason = term()
 %%
 parse(eof, DocId) ->
+    % TODO: We need to check document validity
     {ok, DocId#state.state};
 parse(Chunk, DocId) when is_binary(Chunk) ->
-    {continue, DocId}.
+    Tail = DocId#state.tail,
+    start_parse(<<Tail/binary, Chunk/binary>>, DocId).
 
 
 start_parse(Chunk, Info) ->
@@ -137,9 +139,13 @@ parse_element(<<"</", Tail/binary>>, Info) ->
                 <<">", Tail3/binary>> ->
                     B = Info#state.behaviour,
                     {ok, State} = B:end_element(Tag, Info#state.state),
-                    % TODO: Check tag
-                    [Tag | Stack] = Info#state.stack,
-                    parse_element(Tail3, Info#state{state=State, stack=Stack});
+                    case Info#state.stack of
+                        [Tag | Stack] ->
+                            parse_element(Tail3,
+                                Info#state{state=State, stack=Stack});
+                        _ ->
+                            erlang:error(xml_badtag)
+                    end;
                 _ ->
                     erlang:error(xml_badtag)
             end
@@ -149,7 +155,7 @@ parse_element(<<"<", Tail/binary>>, Info) ->
         {"", Tail} ->
             erlang:error(xml_badtag);
         {Tag, Tail2} ->
-            continue_parsing(Tag, Tail2, Info)
+            parse_open_tag(Tag, Tail2, Info)
     end;
 parse_element(Chunk, Info) ->
     {Data, Tail} = parse_data(Chunk, <<>>),
@@ -167,7 +173,7 @@ parse_data(<<C, Tail/binary>>, Data) ->
     parse_data(Tail, <<Data/binary, C>>).
 
 
-continue_parsing(Tag, Tail, Info) ->
+parse_open_tag(Tag, Tail, Info) ->
     {Attributes, Tail2} = parse_attributes(Tail, []),
     case skip_whitespace(Tail2) of
         <<"/>", Tail3/binary>> ->

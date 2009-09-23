@@ -95,8 +95,8 @@ test_constants() ->
     ok.
 
 
-get_trace(Chunk, Behaviour, Args) ->
-    {ok, Trace} = xml:parse(Chunk, Behaviour, Args),
+get_trace(Chunk) ->
+    {ok, Trace} = xml:parse(Chunk, ?MODULE, []),
     lists:reverse(Trace).
 
 
@@ -118,24 +118,24 @@ test_simple_xml() ->
     [{start_document},
         {start_element, "tag", []},
         {end_element, "tag"},
-        {end_document}] = get_trace(<<"<tag/>">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag/>">>),
     [{start_document},
         {start_element, "tag", []},
         {end_element, "tag"},
-        {end_document}] = get_trace(<<"<tag />">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag />">>),
     [{start_document},
         {start_element, "tag", []},
         {end_element, "tag"},
-        {end_document}] = get_trace(<<"<tag></tag>">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag></tag>">>),
     [{start_document},
         {start_element, "tag", []},
         {end_element, "tag"},
-        {end_document}] = get_trace(<<"<tag ></tag >">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag ></tag >">>),
     [{start_document},
         {start_element, "tag", []},
         {characters, "Data"},
         {end_element, "tag"},
-        {end_document}] = get_trace(<<"<tag>Data</tag>">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag>Data</tag>">>),
     ok.
 
 
@@ -143,17 +143,27 @@ test_simple_attributes() ->
     [{start_document},
         {start_element, "tag", [{"name", "value"}]},
         {end_element, "tag"},
-        {end_document}] = get_trace(<<"<tag name='value'/>">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag name='value'/>">>),
     [{start_document},
         {start_element, "tag", [{"name", " value "}]},
         {end_element, "tag"},
-        {end_document}] = get_trace(
-            <<"<tag name = ' value ' />">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag name = ' value ' />">>),
     [{start_document},
         {start_element, "tag", [{"n1", "v1"}, {"n2", "v2"}]},
         {end_element, "tag"},
-        {end_document}] = get_trace(
-            <<"<tag n1='v1' n2=\"v2\" />">>, ?MODULE, []),
+        {end_document}] = get_trace(<<"<tag n1='v1' n2=\"v2\" />">>),
+    ok.
+
+
+test_continuation() ->
+    {continue, DocId} = xml:parse(<<"<tag>Da">>, ?MODULE, []),
+    {ok, Trace} = xml:parse(<<"ta</tag>">>, DocId),
+    [{start_document},
+        {start_element, "tag", []},
+        {characters, "Da"},
+        {characters, "ta"},
+        {end_element, "tag"},
+        {end_document}] = lists:reverse(Trace),
     ok.
 
 
@@ -162,4 +172,5 @@ test() ->
     test_errors(),
     test_simple_xml(),
     test_simple_attributes(),
+    test_continuation(),
     ok.
