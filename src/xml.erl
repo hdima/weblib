@@ -111,9 +111,10 @@ parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
 %%      Result = {continue, DocId} | {ok, State)
 %%      Reason = term()
 %%
-parse(eof, DocId) ->
-    % TODO: We need to check document validity
+parse(eof, #state{tail=(<<>>), stack=[]}=DocId) ->
     {ok, DocId#state.state};
+parse(eof, _) ->
+    erlang:error(xml_error);
 parse(Chunk, DocId) when is_binary(Chunk) ->
     Tail = DocId#state.tail,
     start_parse(<<Tail/binary, Chunk/binary>>, DocId).
