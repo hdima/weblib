@@ -150,7 +150,21 @@ parse_element(<<"<", Tail/binary>>, Info) ->
             erlang:error(xml_badtag);
         {Tag, Tail2} ->
             continue_parsing(Tag, Tail2, Info)
-    end.
+    end;
+parse_element(Chunk, Info) ->
+    {Data, Tail} = parse_data(Chunk, <<>>),
+    {ok, State} = (Info#state.behaviour):characters(Data, Info#state.state),
+    parse_element(Tail, Info#state{state=State}).
+
+
+parse_data(<<>>, Data) ->
+    % TODO: Decode binary data
+    {binary_to_list(Data), <<>>};
+parse_data(<<"<", _/binary>>=Tail, Data) ->
+    % TODO: Decode binary data
+    {binary_to_list(Data), Tail};
+parse_data(<<C, Tail/binary>>, Data) ->
+    parse_data(Tail, <<Data/binary, C>>).
 
 
 continue_parsing(Tag, Tail, Info) ->

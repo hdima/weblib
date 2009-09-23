@@ -131,6 +131,11 @@ test_simple_xml() ->
         {start_element, "tag", []},
         {end_element, "tag"},
         {end_document}] = get_trace(<<"<tag ></tag >">>, ?MODULE, []),
+    [{start_document},
+        {start_element, "tag", []},
+        {characters, "Data"},
+        {end_element, "tag"},
+        {end_document}] = get_trace(<<"<tag>Data</tag>">>, ?MODULE, []),
     ok.
 
 
@@ -148,7 +153,7 @@ test_simple_attributes() ->
         {start_element, "tag", [{"n1", "v1"}, {"n2", "v2"}]},
         {end_element, "tag"},
         {end_document}] = get_trace(
-            <<"<tag n1='v1' n2='v2' />">>, ?MODULE, []),
+            <<"<tag n1='v1' n2=\"v2\" />">>, ?MODULE, []),
     ok.
 
 
