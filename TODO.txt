@@ -1,6 +1,8 @@
 XML parser
 ----------
 
+- Parse entity references
+
 - Return line number and char for all errors
 
 - Pass location info to callback methods
