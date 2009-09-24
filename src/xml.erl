@@ -152,7 +152,7 @@ parse_element(<<"</", Tail/binary>>, Info) ->
                     erlang:error(xml_badtag)
             end
     catch
-        throw:empty ->
+        throw:empty when Tail =/= <<>> ->
             erlang:error(xml_badtag)
     end;
 parse_element(<<"<", Tail/binary>>, Info) ->
@@ -160,7 +160,7 @@ parse_element(<<"<", Tail/binary>>, Info) ->
         {Tag, Tail2} ->
             parse_open_tag(Tag, Tail2, Info)
     catch
-        throw:empty ->
+        throw:empty when Tail =/= <<>> ->
             erlang:error(xml_badtag)
     end;
 parse_element(Chunk, Info) ->
@@ -242,6 +242,8 @@ parse_attributes(Chunk, Attributes) ->
             {lists:reverse(Attributes), Chunk};
         Tail ->
             try parse_name(Tail, <<>>) of
+                {_, <<>>} ->
+                    throw(empty);
                 {Name, Tail2} ->
                     Tail3 = parse_eq(Tail2),
                     {Value, Tail4} = parse_value(Tail3, <<>>, none),
@@ -262,6 +264,16 @@ parse_eq(Chunk) ->
     end.
 
 
+%%
+%% @doc Parse attribute value
+%% @spec parse_value(Chunk, Acc, Quote) -> {Value, Tail}
+%%      Chunk = binary()
+%%      Acc = binary()
+%%      Quote = none | $" | $'
+%%      Value = string()
+%%      Tail = binary()
+%% @throws empty
+%%
 parse_value(<<C, Tail/binary>>, <<>>, none) when ?is_quote(C) ->
     parse_value(Tail, <<>>, C);
 parse_value(<<Q, Tail/binary>>, Value, Q) ->
@@ -269,5 +281,7 @@ parse_value(<<Q, Tail/binary>>, Value, Q) ->
     {binary_to_list(Value), Tail};
 parse_value(<<C, Tail/binary>>, Value, Q) when ?is_attrvaluechar(C, Q) ->
     parse_value(Tail, <<Value/binary, C>>, Q);
+parse_value(<<>>, _, _) ->
+    throw(empty);
 parse_value(_, _, _) ->
     erlang:error(xml_badattr).

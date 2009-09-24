@@ -181,6 +181,12 @@ test_continuation() ->
         {start_element, "tag", []},
         {end_element, "tag"},
         {end_document}] = get_chunked_trace([<<"<ta">>, <<"g/>">>]),
+    [{start_document},
+        {start_element, "tag", [{"name", "value"}]},
+        {end_element, "tag"},
+        {end_document}] = get_chunked_trace(
+            [<<"<">>, <<"ta">>, <<"g">>, <<" name">>, <<"='">>,
+                <<"value">>, <<"'/>">>]),
     ok.
 
 
