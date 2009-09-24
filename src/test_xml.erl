@@ -126,18 +126,18 @@ get_callbacks(List, N) ->
     end.
 
 
-% FIXME: Check callbacks
+get_error(Chunk) ->
+    {'EXIT', Info} = (catch xml:parse(Chunk, ?MODULE, [])),
+    Info.
+
 test_errors() ->
-    {'EXIT', {xml_nodata, _}} = (catch xml:parse(<<>>, ?MODULE, [])),
-    {'EXIT', {xml_badtag, _}} = (catch xml:parse(<<"</>">>, ?MODULE, [])),
-    {'EXIT', {xml_badtag, _}} = (catch xml:parse(<<"< tag/>">>, ?MODULE, [])),
-    {'EXIT', {xml_badattr, _}} = (catch xml:parse(<<"<tag =/>">>, ?MODULE, [])),
-    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
-        <<"<tag name/>">>, ?MODULE, [])),
-    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
-        <<"<tag name name=/>">>, ?MODULE, [])),
-    {'EXIT', {xml_badattr, _}} = (catch xml:parse(
-        <<"<tag n1='v1'n2='v2'/>">>, ?MODULE, [])),
+    {xml_nodata, _} = get_error(<<>>),
+    {xml_badtag, _} = get_error(<<"</>">>),
+    {xml_badtag, _} = get_error(<<"< tag/>">>),
+    {xml_badattr, _} = get_error(<<"<tag =/>">>),
+    {xml_badattr, _} = get_error(<<"<tag name/>">>),
+    {xml_badattr, _} = get_error(<<"<tag name name=/>">>),
+    {xml_badattr, _} = get_error(<<"<tag n1='v1'n2='v2'/>">>),
     ok.
 
 
