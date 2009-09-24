@@ -225,16 +225,14 @@ test_continuation() ->
         end_document] = get_chunked_trace(
             [<<"<">>, <<"ta">>, <<"g">>, <<" name">>, <<"='">>,
                 <<"value">>, <<"'/>">>]),
-    % FIXME
-    %[start_document,
-    %    {start_element, "a", []},
-    %    {start_element, "b", []},
-    %    {end_element, "b"},
-    %    {start_element, "c", []},
-    %    {end_element, "c"},
-    %    {end_element, "a"},
-    %    end_document] = get_chunked_trace(
-    %        [<<"<a><b/><c">>, <<"/></a>">>]),
+    [start_document,
+        {start_element, "a", []},
+        {start_element, "b", []},
+        {end_element, "b"},
+        {start_element, "c", []},
+        {end_element, "c"},
+        {end_element, "a"},
+        end_document] = get_chunked_trace([<<"<a><b/><c">>, <<"/></a>">>]),
     ok.
 
 

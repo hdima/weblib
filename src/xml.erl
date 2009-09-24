@@ -121,20 +121,17 @@ parse(Chunk, DocId) when is_binary(Chunk) ->
 
 
 start_parse(Chunk, Info) ->
-    try parse_element(Chunk, Info) of
+    case parse_element(Chunk, Info) of
         #state{stack=[], tail=(<<>>)}=Info2 ->
             (Info2#state.behaviour):end_document(Info2#state.state);
         Info2 ->
             {continue, Info2}
-    catch
-        throw:need_more_data ->
-            {continue, Info#state{tail=Chunk}}
     end.
 
 
 parse_element(<<>>, Info) ->
     Info;
-parse_element(<<"</", Tail/binary>>, Info) ->
+parse_element(<<"</", Tail/binary>>=Chunk, Info) ->
     try parse_name(Tail, <<>>) of
         {Tag, Tail2} ->
             case skip_whitespace(Tail2) of
@@ -153,15 +150,23 @@ parse_element(<<"</", Tail/binary>>, Info) ->
             end
     catch
         throw:bad_name ->
-            erlang:error(xml_badtag)
+            erlang:error(xml_badtag);
+        throw:need_more_data ->
+            Info#state{tail=Chunk}
     end;
-parse_element(<<"<", Tail/binary>>, Info) ->
+parse_element(<<"<", Tail/binary>>=Chunk, Info) ->
     try parse_name(Tail, <<>>) of
         {Tag, Tail2} ->
-            parse_open_tag(Tag, Tail2, Info)
+            try parse_open_tag(Tag, Tail2, Info)
+            catch
+                throw:need_more_data ->
+                    Info#state{tail=Chunk}
+            end
     catch
         throw:bad_name ->
-            erlang:error(xml_badtag)
+            erlang:error(xml_badtag);
+        throw:need_more_data ->
+            Info#state{tail=Chunk}
     end;
 parse_element(Chunk, Info) ->
     {Data, Tail} = parse_data(Chunk, <<>>),
