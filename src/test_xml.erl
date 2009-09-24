@@ -177,6 +177,10 @@ test_continuation() ->
         {characters, "ta"},
         {end_element, "tag"},
         {end_document}] = get_chunked_trace([<<"<tag>Da">>, <<"ta</tag>">>]),
+    [{start_document},
+        {start_element, "tag", []},
+        {end_element, "tag"},
+        {end_document}] = get_chunked_trace([<<"<ta">>, <<"g/>">>]),
     ok.
 
 

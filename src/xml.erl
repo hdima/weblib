@@ -117,24 +117,25 @@ parse(eof, _) ->
     erlang:error(xml_error);
 parse(Chunk, DocId) when is_binary(Chunk) ->
     Tail = DocId#state.tail,
-    start_parse(<<Tail/binary, Chunk/binary>>, DocId).
+    start_parse(<<Tail/binary, Chunk/binary>>, DocId#state{tail=(<<>>)}).
 
 
 start_parse(Chunk, Info) ->
-    case parse_element(Chunk, Info) of
-        #state{stack=[]}=Info2 ->
+    try parse_element(Chunk, Info) of
+        #state{stack=[], tail=(<<>>)}=Info2 ->
             (Info2#state.behaviour):end_document(Info2#state.state);
         Info2 ->
             {continue, Info2}
+    catch
+        throw:empty ->
+            {continue, Info#state{tail=Chunk}}
     end.
 
 
 parse_element(<<>>, Info) ->
     Info;
 parse_element(<<"</", Tail/binary>>, Info) ->
-    case parse_name(Tail, <<>>) of
-        {"", Tail} ->
-            erlang:error(xml_badtag);
+    try parse_name(Tail, <<>>) of
         {Tag, Tail2} ->
             case skip_whitespace(Tail2) of
                 <<">", Tail3/binary>> ->
@@ -150,13 +151,17 @@ parse_element(<<"</", Tail/binary>>, Info) ->
                 _ ->
                     erlang:error(xml_badtag)
             end
+    catch
+        throw:empty ->
+            erlang:error(xml_badtag)
     end;
 parse_element(<<"<", Tail/binary>>, Info) ->
-    case parse_name(Tail, <<>>) of
-        {"", Tail} ->
-            erlang:error(xml_badtag);
+    try parse_name(Tail, <<>>) of
         {Tag, Tail2} ->
             parse_open_tag(Tag, Tail2, Info)
+    catch
+        throw:empty ->
+            erlang:error(xml_badtag)
     end;
 parse_element(Chunk, Info) ->
     {Data, Tail} = parse_data(Chunk, <<>>),
@@ -200,8 +205,19 @@ skip_whitespace(Tail) ->
     Tail.
 
 
+%%
+%% @doc Parse tag and attribute names
+%% @spec parse_name(Chunk, Acc) -> {Tag, Tail}
+%%      Chunk = binary()
+%%      Acc = binary()
+%%      Tag = string()
+%%      Tail = binary()
+%% @throws empty
+%%
 parse_name(<<C, Tail/binary>>, <<>>) when ?is_namestartchar(C) ->
     parse_name(Tail, <<C>>);
+parse_name(_, <<>>) ->
+    throw(empty);
 parse_name(<<C, Tail/binary>>, Name) when ?is_namechar(C) ->
     parse_name(Tail, <<Name/binary, C>>);
 parse_name(Tail, Name) ->
@@ -209,18 +225,30 @@ parse_name(Tail, Name) ->
     {binary_to_list(Name), Tail}.
 
 
+%%
+%% @doc Parse tag attributes
+%% @spec parse_attributes(Chunk, Acc) -> {Attributes, Tail}
+%%      Chunk = binary()
+%%      Acc = list()
+%%      Attributes = list()
+%%      Tail = binary()
+%% @throws empty
+%%
 parse_attributes(Chunk, Attributes) ->
     case skip_whitespace(Chunk) of
+        <<>> ->
+            throw(empty);
         Chunk ->
             {lists:reverse(Attributes), Chunk};
         Tail ->
-            case parse_name(Tail, <<>>) of
-                {"", Tail} ->
-                    {lists:reverse(Attributes), Tail};
+            try parse_name(Tail, <<>>) of
                 {Name, Tail2} ->
                     Tail3 = parse_eq(Tail2),
                     {Value, Tail4} = parse_value(Tail3, <<>>, none),
                     parse_attributes(Tail4, [{Name, Value} | Attributes])
+            catch
+                throw:empty ->
+                    {lists:reverse(Attributes), Tail}
             end
     end.
 
