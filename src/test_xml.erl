@@ -233,6 +233,14 @@ test_continuation() ->
         {end_element, "c"},
         {end_element, "a"},
         end_document] = get_chunked_trace([<<"<a><b/><c">>, <<"/></a>">>]),
+    [start_document,
+        {start_element, "a", [{"n", "v"}]},
+        {end_element, "a"},
+        end_document] = get_chunked_trace([<<"<a n='v' ">>, <<" ></a>">>]),
+    [start_document,
+        {start_element, "a", []},
+        {end_element, "a"},
+        end_document] = get_chunked_trace([<<"<a></a ">>, <<" >">>]),
     ok.
 
 
