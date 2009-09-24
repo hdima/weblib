@@ -104,21 +104,22 @@ test_constants() ->
 
 get_trace(Chunk) ->
     Server = self(),
-    % TODO: Check N in tests
     {ok, {Server, N}} = xml:parse(Chunk, ?MODULE, {Server, 0}),
-    get_callbacks().
+    get_callbacks(N).
 
 
-get_callbacks() ->
+get_callbacks(N) ->
     self() ! eof,
-    get_callbacks([]).
+    get_callbacks([], N).
 
-get_callbacks(List) ->
+get_callbacks(List, N) ->
     receive
-        eof ->
+        eof when N =:= 0 ->
             lists:reverse(List);
+        eof ->
+            error;
         Info ->
-            get_callbacks([Info | List])
+            get_callbacks([Info | List], N - 1)
     after
         500 ->
             error
@@ -203,8 +204,7 @@ get_chunked_trace([Chunk | Chunks], {DocId, Server}) ->
         {continue, NewId} ->
             get_chunked_trace(Chunks, {NewId, Server});
         {ok, {Server, N}} ->
-            % TODO: Check N in tests
-            get_callbacks()
+            get_callbacks(N)
     end.
 
 
