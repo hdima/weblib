@@ -155,15 +155,28 @@ test_simple_attributes() ->
     ok.
 
 
+get_chunked_trace(Chunks) ->
+    get_chunked_trace(Chunks, none).
+
+get_chunked_trace([Chunk | Chunks], none) ->
+    {continue, DocId} = xml:parse(Chunk, ?MODULE, []),
+    get_chunked_trace(Chunks, DocId);
+get_chunked_trace([Chunk | Chunks], DocId) ->
+    case xml:parse(Chunk, DocId) of
+        {continue, NewId} ->
+            get_chunked_trace(Chunks, NewId);
+        {ok, Trace} ->
+            lists:reverse(Trace)
+    end.
+
+
 test_continuation() ->
-    {continue, DocId} = xml:parse(<<"<tag>Da">>, ?MODULE, []),
-    {ok, Trace} = xml:parse(<<"ta</tag>">>, DocId),
     [{start_document},
         {start_element, "tag", []},
         {characters, "Da"},
         {characters, "ta"},
         {end_element, "tag"},
-        {end_document}] = lists:reverse(Trace),
+        {end_document}] = get_chunked_trace([<<"<tag>Da">>, <<"ta</tag>">>]),
     ok.
 
 
