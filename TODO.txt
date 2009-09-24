@@ -1,6 +1,8 @@
 XML parser
 ----------
 
+- Rewrite tests with message passing
+
 - Parse entity references
 
 - Return line number and char for all errors

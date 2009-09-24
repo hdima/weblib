@@ -136,6 +136,16 @@ test_simple_xml() ->
         {characters, "Data"},
         {end_element, "tag"},
         {end_document}] = get_trace(<<"<tag>Data</tag>">>),
+    [{start_document},
+        {start_element, "a", []},
+        {characters, "A"},
+        {start_element, "b", []},
+        {characters, "B"},
+        {start_element, "c", []},
+        {end_element, "c"},
+        {end_element, "b"},
+        {end_element, "a"},
+        {end_document}] = get_trace(<<"<a>A<b>B<c/></b></a>">>),
     ok.
 
 
@@ -187,6 +197,15 @@ test_continuation() ->
         {end_document}] = get_chunked_trace(
             [<<"<">>, <<"ta">>, <<"g">>, <<" name">>, <<"='">>,
                 <<"value">>, <<"'/>">>]),
+    [{start_document},
+        {start_element, "a", []},
+        {start_element, "b", []},
+        {end_element, "b"},
+        {start_element, "c", []},
+        {end_element, "c"},
+        {end_element, "a"},
+        {end_document}] = get_chunked_trace(
+            [<<"<a><b/><c">>, <<"/></a>">>]),
     ok.
 
 
