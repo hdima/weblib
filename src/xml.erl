@@ -149,13 +149,7 @@ parse_document(Chunk, Info) ->
 parse_element(<<>>, Info) ->
     Info;
 parse_element(<<"</", Tail/binary>>=Chunk, Info) ->
-    try parse_name(Tail, <<>>) of
-        {Tag, Tail2} ->
-            try parse_close_tag(Tag, Tail2, Info)
-            catch
-                throw:need_more_data ->
-                    Info#state{tail=Chunk}
-            end
+    try parse_close_tag(Tail, Info)
     catch
         throw:bad_name ->
             erlang:error(xml_badtag);
@@ -163,13 +157,7 @@ parse_element(<<"</", Tail/binary>>=Chunk, Info) ->
             Info#state{tail=Chunk}
     end;
 parse_element(<<"<", Tail/binary>>=Chunk, Info) ->
-    try parse_name(Tail, <<>>) of
-        {Tag, Tail2} ->
-            try parse_open_tag(Tag, Tail2, Info)
-            catch
-                throw:need_more_data ->
-                    Info#state{tail=Chunk}
-            end
+    try parse_open_tag(Tail, Info)
     catch
         throw:bad_name ->
             erlang:error(xml_badtag);
@@ -183,13 +171,13 @@ parse_element(Chunk, Info) ->
 
 
 %%
-%% @doc Continue open tag parsing
-%% @spec parse_open_tag(Tag, Tail, Info) -> none()
-%%      Tag = string()
-%%      Tail = binary()
+%% @doc Parse open tag
+%% @spec parse_open_tag(Chunk, Info) -> none()
+%%      Chunk = binary()
 %%      Info = term()
 %%
-parse_open_tag(Tag, Tail, Info) ->
+parse_open_tag(Chunk, Info) ->
+    {Tag, Tail} = parse_name(Chunk, <<>>),
     {Attributes, Tail2} = parse_attributes(Tail, []),
     case skip_whitespace(Tail2) of
         <<"/>", Tail3/binary>> ->
@@ -210,13 +198,13 @@ parse_open_tag(Tag, Tail, Info) ->
 
 
 %%
-%% @doc Continue close tag parsing
-%% @spec parse_close_tag(Tag, Tail, Info) -> none()
-%%      Tag = string()
-%%      Tail = binary()
+%% @doc Parse close tag
+%% @spec parse_close_tag(Chunk, Info) -> none()
+%%      Chunk = binary()
 %%      Info = term()
 %%
-parse_close_tag(Tag, Tail, Info) ->
+parse_close_tag(Chunk, Info) ->
+    {Tag, Tail} = parse_name(Chunk, <<>>),
     case skip_whitespace(Tail) of
         <<">", Tail2/binary>> ->
             B = Info#state.behaviour,
