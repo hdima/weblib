@@ -148,78 +148,79 @@ parse_document(Chunk, Info) ->
 %%
 parse_element(<<>>, Info) ->
     Info;
-parse_element(<<"</", Tail/binary>>=Chunk, Info) ->
-    try parse_close_tag(Tail, Info)
-    catch
-        throw:bad_name ->
-            erlang:error(xml_badtag);
-        throw:need_more_data ->
-            Info#state{tail=Chunk}
-    end;
-parse_element(<<"<", Tail/binary>>=Chunk, Info) ->
-    try parse_open_tag(Tail, Info)
-    catch
-        throw:bad_name ->
-            erlang:error(xml_badtag);
-        throw:need_more_data ->
-            Info#state{tail=Chunk}
-    end;
 parse_element(Chunk, Info) ->
-    {Data, Tail} = parse_data(Chunk, <<>>),
-    {ok, State} = (Info#state.behaviour):characters(Data, Info#state.state),
-    parse_element(Tail, Info#state{state=State}).
-
-
-%%
-%% @doc Parse open tag
-%% @spec parse_open_tag(Chunk, Info) -> none()
-%%      Chunk = binary()
-%%      Info = term()
-%%
-parse_open_tag(Chunk, Info) ->
-    {Tag, Tail} = parse_name(Chunk, <<>>),
-    {Attributes, Tail2} = parse_attributes(Tail, []),
-    case skip_whitespace(Tail2) of
-        <<"/>", Tail3/binary>> ->
-            B = Info#state.behaviour,
-            {ok, State} = B:start_element(Tag, Attributes,
-                Info#state.state),
-            {ok, State2} = B:end_element(Tag, State),
-            parse_element(Tail3, Info#state{state=State2});
-        <<">", Tail3/binary>> ->
-            B = Info#state.behaviour,
-            {ok, State} = B:start_element(Tag, Attributes,
-                Info#state.state),
+    B = Info#state.behaviour,
+    try parse_term(Chunk) of
+        {{open_tag, Tag, Attributes}, Tail} ->
+            {ok, State} = B:start_element(Tag, Attributes, Info#state.state),
             Stack = Info#state.stack,
-            parse_element(Tail3, Info#state{state=State, stack=[Tag | Stack]});
-        _ ->
-            erlang:error(xml_badattr)
+            parse_element(Tail, Info#state{state=State, stack=[Tag | Stack]});
+        {{open_close_tag, Tag, Attributes}, Tail} ->
+            {ok, State} = B:start_element(Tag, Attributes, Info#state.state),
+            {ok, State2} = B:end_element(Tag, State),
+            parse_element(Tail, Info#state{state=State2});
+        {{close_tag, Tag}, Tail} ->
+            {ok, State} = B:end_element(Tag, Info#state.state),
+            case Info#state.stack of
+                [Tag | Stack] ->
+                    parse_element(Tail, Info#state{state=State, stack=Stack});
+                _ ->
+                    erlang:error(xml_badtag)
+            end;
+        {{characters, Data}, Tail} ->
+            {ok, State} = B:characters(Data, Info#state.state),
+            parse_element(Tail, Info#state{state=State})
+    catch
+        throw:bad_name ->
+            erlang:error(xml_badtag);
+        throw:need_more_data ->
+            Info#state{tail=Chunk}
     end.
 
 
 %%
-%% @doc Parse close tag
-%% @spec parse_close_tag(Chunk, Info) -> none()
+%% @doc Parse single XML term
+%% @throws need_more_data
+%% @spec parse_term(Chunk) -> Result
 %%      Chunk = binary()
-%%      Info = term()
+%%      Result = {TermInfo, Tail}
+%%      Tail = binary()
+%%      TermInfo = {open_tag, Tag, Attributes}
+%%          | {open_close_tag, Tag, Attributes}
+%%          | {close_tag, Tag}
+%%          | {characters, Data}
+%%      Tag = string()
+%%      Attributes = [{Key, Value} | ...]
+%%      Key = string()
+%%      Value = string()
+%%      Data = string()
 %%
-parse_close_tag(Chunk, Info) ->
-    {Tag, Tail} = parse_name(Chunk, <<>>),
-    case skip_whitespace(Tail) of
-        <<">", Tail2/binary>> ->
-            B = Info#state.behaviour,
-            {ok, State} = B:end_element(Tag, Info#state.state),
-            case Info#state.stack of
-                [Tag | Stack] ->
-                    parse_element(Tail2, Info#state{state=State, stack=Stack});
-                _ ->
-                    erlang:error(xml_badtag)
-            end;
+parse_term(<<>>) ->
+    throw(need_more_data);
+parse_term(<<"</", Tail/binary>>) ->
+    {Tag, Tail2} = parse_name(Tail, <<>>),
+    case skip_whitespace(Tail2) of
+        <<">", Tail3/binary>> ->
+            {{close_tag, Tag}, Tail3};
         <<>> ->
             throw(need_more_data);
         _ ->
             erlang:error(xml_badtag)
-    end.
+    end;
+parse_term(<<"<", Tail/binary>>) ->
+    {Tag, Tail2} = parse_name(Tail, <<>>),
+    {Attributes, Tail3} = parse_attributes(Tail2, []),
+    case skip_whitespace(Tail3) of
+        <<"/>", Tail4/binary>> ->
+            {{open_close_tag, Tag, Attributes}, Tail4};
+        <<">", Tail4/binary>> ->
+            {{open_tag, Tag, Attributes}, Tail4};
+        _ ->
+            erlang:error(xml_badattr)
+    end;
+parse_term(Chunk) ->
+    {Data, Tail} = parse_data(Chunk, <<>>),
+    {{characters, Data}, Tail}.
 
 
 %%
@@ -280,7 +281,9 @@ parse_name(Tail, Name) ->
 %% @spec parse_attributes(Chunk, Acc) -> {Attributes, Tail}
 %%      Chunk = binary()
 %%      Acc = list()
-%%      Attributes = list()
+%%      Attributes = [{Key, Value} | ...]
+%%      Key = string()
+%%      Value = string()
 %%      Tail = binary()
 %%
 parse_attributes(Chunk, Attributes) ->
