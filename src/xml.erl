@@ -195,8 +195,6 @@ parse_element(Chunk, Info) ->
 %%      Value = string()
 %%      Data = string()
 %%
-parse_term(<<>>) ->
-    throw(need_more_data);
 parse_term(<<"</", Tail/binary>>) ->
     {Tag, Tail2} = parse_name(Tail, <<>>),
     case skip_whitespace(Tail2) of
