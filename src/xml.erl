@@ -199,6 +199,8 @@ parse_element(Chunk, Info) ->
 %%      Value = string()
 %%      Data = string()
 %%
+parse_term(<<"<!--", Tail/binary>>, Decoder) ->
+    parse_term(skip_over(Tail, <<"-->">>), Decoder);
 parse_term(<<"</", Tail/binary>>, Decoder) ->
     {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
     case skip_whitespace(Tail2) of
@@ -240,6 +242,28 @@ parse_data(<<"<", _/binary>>=Tail, Decoder, Data) ->
     {Decoder(Data), Tail};
 parse_data(<<C, Tail/binary>>, Decoder, Data) ->
     parse_data(Tail, Decoder, <<Data/binary, C>>).
+
+
+%%
+%% @doc Skip at the end of the pattern
+%% @throws need_more_data
+%% @spec skip_over(Chunk, Pattern) -> Tail
+%%      Chunk = binary()
+%%      Pattern = binary()
+%%      Tail = binary()
+%%
+skip_over(Chunk, Pattern) ->
+    skip_over(Chunk, Pattern, size(Pattern)).
+
+skip_over(<<>>, _, _) ->
+    throw(need_more_data);
+skip_over(Chunk, Pattern, Size) ->
+    case Chunk of
+        <<Pattern:Size/binary, Tail/binary>> ->
+            Tail;
+        <<_, Tail/binary>> ->
+            skip_over(Tail, Pattern, Size)
+    end.
 
 
 %%

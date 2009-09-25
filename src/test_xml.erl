@@ -244,10 +244,19 @@ test_continuation() ->
     ok.
 
 
+test_comments() ->
+    [start_document,
+        {start_element, "tag", []},
+        {end_element, "tag"},
+        end_document] = get_trace(<<"<tag><!-- Comment --></tag>">>),
+    ok.
+
+
 test() ->
     test_constants(),
     test_errors(),
     test_simple_xml(),
     test_simple_attributes(),
     test_continuation(),
+    test_comments(),
     ok.
