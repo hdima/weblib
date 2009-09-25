@@ -57,7 +57,7 @@
 %%
 -module(xml).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.2").
+-vsn("0.3").
 
 %% Public interface
 -export([parse/3, parse/2]).
@@ -69,10 +69,11 @@
 
 %% Parser state
 -record(state, {
+    behaviour,
+    state,
     tail=(<<>>),
     stack=[],
-    behaviour,
-    state
+    decoder
     }).
 
 
@@ -99,7 +100,9 @@ parse(<<>>, _, _) ->
     erlang:error(xml_nodata);
 parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
     {ok, State} = Behaviour:start_document(Args),
-    Info = #state{behaviour=Behaviour, state=State},
+    % TODO: Need to be replaced with the real one
+    Decoder = fun (S) -> binary_to_list(S) end,
+    Info = #state{behaviour=Behaviour, state=State, decoder=Decoder},
     parse_document(Chunk, Info).
 
 
@@ -150,7 +153,7 @@ parse_element(<<>>, Info) ->
     Info;
 parse_element(Chunk, Info) ->
     B = Info#state.behaviour,
-    try parse_term(Chunk) of
+    try parse_term(Chunk, Info#state.decoder) of
         {{open_tag, Tag, Attributes}, Tail} ->
             {ok, State} = B:start_element(Tag, Attributes, Info#state.state),
             Stack = Info#state.stack,
@@ -181,8 +184,9 @@ parse_element(Chunk, Info) ->
 %%
 %% @doc Parse single XML term
 %% @throws need_more_data
-%% @spec parse_term(Chunk) -> Result
+%% @spec parse_term(Chunk, Decoder) -> Result
 %%      Chunk = binary()
+%%      Decoder = function()
 %%      Result = {TermInfo, Tail}
 %%      Tail = binary()
 %%      TermInfo = {open_tag, Tag, Attributes}
@@ -195,8 +199,8 @@ parse_element(Chunk, Info) ->
 %%      Value = string()
 %%      Data = string()
 %%
-parse_term(<<"</", Tail/binary>>) ->
-    {Tag, Tail2} = parse_name(Tail, <<>>),
+parse_term(<<"</", Tail/binary>>, Decoder) ->
+    {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
     case skip_whitespace(Tail2) of
         <<">", Tail3/binary>> ->
             {{close_tag, Tag}, Tail3};
@@ -205,9 +209,9 @@ parse_term(<<"</", Tail/binary>>) ->
         _ ->
             erlang:error(xml_badtag)
     end;
-parse_term(<<"<", Tail/binary>>) ->
-    {Tag, Tail2} = parse_name(Tail, <<>>),
-    {Attributes, Tail3} = parse_attributes(Tail2, []),
+parse_term(<<"<", Tail/binary>>, Decoder) ->
+    {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
+    {Attributes, Tail3} = parse_attributes(Tail2, Decoder, []),
     case skip_whitespace(Tail3) of
         <<"/>", Tail4/binary>> ->
             {{open_close_tag, Tag, Attributes}, Tail4};
@@ -216,27 +220,26 @@ parse_term(<<"<", Tail/binary>>) ->
         _ ->
             erlang:error(xml_badattr)
     end;
-parse_term(Chunk) ->
-    {Data, Tail} = parse_data(Chunk, <<>>),
+parse_term(Chunk, Decoder) ->
+    {Data, Tail} = parse_data(Chunk, Decoder, <<>>),
     {{characters, Data}, Tail}.
 
 
 %%
 %% @doc Parse character data
-%% @spec parse_data(Chunk, Acc) -> {Data, Tail}
+%% @spec parse_data(Chunk, Decoder, Acc) -> {Data, Tail}
 %%      Chunk = binary()
+%%      Decoder = function()
 %%      Acc = binary()
 %%      Data = string()
 %%      Tail = binary()
 %%
-parse_data(<<>>, Data) ->
-    % TODO: Decode binary data
-    {binary_to_list(Data), <<>>};
-parse_data(<<"<", _/binary>>=Tail, Data) ->
-    % TODO: Decode binary data
-    {binary_to_list(Data), Tail};
-parse_data(<<C, Tail/binary>>, Data) ->
-    parse_data(Tail, <<Data/binary, C>>).
+parse_data(<<>>, Decoder, Data) ->
+    {Decoder(Data), <<>>};
+parse_data(<<"<", _/binary>>=Tail, Decoder, Data) ->
+    {Decoder(Data), Tail};
+parse_data(<<C, Tail/binary>>, Decoder, Data) ->
+    parse_data(Tail, Decoder, <<Data/binary, C>>).
 
 
 %%
@@ -254,23 +257,23 @@ skip_whitespace(Tail) ->
 %%
 %% @doc Parse tag and attribute names
 %% @throws bad_name | need_more_data
-%% @spec parse_name(Chunk, Acc) -> {Tag, Tail}
+%% @spec parse_name(Chunk, Decoder, Acc) -> {Tag, Tail}
 %%      Chunk = binary()
+%%      Decoder = function()
 %%      Acc = binary()
 %%      Tag = string()
 %%      Tail = binary()
 %%
-parse_name(<<>>, _) ->
+parse_name(<<>>, _, _) ->
     throw(need_more_data);
-parse_name(<<C, Tail/binary>>, <<>>) when ?is_namestartchar(C) ->
-    parse_name(Tail, <<C>>);
-parse_name(_, <<>>) ->
+parse_name(<<C, Tail/binary>>, Decoder, <<>>) when ?is_namestartchar(C) ->
+    parse_name(Tail, Decoder, <<C>>);
+parse_name(_, _, <<>>) ->
     throw(bad_name);
-parse_name(<<C, Tail/binary>>, Name) when ?is_namechar(C) ->
-    parse_name(Tail, <<Name/binary, C>>);
-parse_name(Tail, Name) ->
-    % TODO: Need to decode name
-    {binary_to_list(Name), Tail}.
+parse_name(<<C, Tail/binary>>, Decoder, Name) when ?is_namechar(C) ->
+    parse_name(Tail, Decoder, <<Name/binary, C>>);
+parse_name(Tail, Decoder, Name) ->
+    {Decoder(Name), Tail}.
 
 
 %%
@@ -284,18 +287,19 @@ parse_name(Tail, Name) ->
 %%      Value = string()
 %%      Tail = binary()
 %%
-parse_attributes(Chunk, Attributes) ->
+parse_attributes(Chunk, Decoder, Attributes) ->
     case skip_whitespace(Chunk) of
         <<>> ->
             throw(need_more_data);
         Chunk ->
             {lists:reverse(Attributes), Chunk};
         Tail ->
-            try parse_name(Tail, <<>>) of
+            try parse_name(Tail, Decoder, <<>>) of
                 {Name, Tail2} ->
                     Tail3 = parse_eq(Tail2),
-                    {Value, Tail4} = parse_value(Tail3, <<>>, none),
-                    parse_attributes(Tail4, [{Name, Value} | Attributes])
+                    {Value, Tail4} = parse_value(Tail3, Decoder, <<>>, none),
+                    parse_attributes(Tail4, Decoder,
+                        [{Name, Value} | Attributes])
             catch
                 throw:bad_name ->
                     {lists:reverse(Attributes), Tail}
@@ -321,21 +325,22 @@ parse_eq(Chunk) ->
 %%
 %% @doc Parse attribute value
 %% @throws need_more_data
-%% @spec parse_value(Chunk, Acc, Quote) -> {Value, Tail}
+%% @spec parse_value(Chunk, Decoder, Acc, Quote) -> {Value, Tail}
 %%      Chunk = binary()
+%%      Decoder = function()
 %%      Acc = binary()
 %%      Quote = none | $" | $'
 %%      Value = string()
 %%      Tail = binary()
 %%
-parse_value(<<>>, _, _) ->
+parse_value(<<>>, _, _, _) ->
     throw(need_more_data);
-parse_value(<<C, Tail/binary>>, <<>>, none) when ?is_quote(C) ->
-    parse_value(Tail, <<>>, C);
-parse_value(<<Q, Tail/binary>>, Value, Q) ->
-    % TODO: Need to decode bytes
-    {binary_to_list(Value), Tail};
-parse_value(<<C, Tail/binary>>, Value, Q) when ?is_attrvaluechar(C, Q) ->
-    parse_value(Tail, <<Value/binary, C>>, Q);
-parse_value(_, _, _) ->
+parse_value(<<C, Tail/binary>>, Decoder, <<>>, none) when ?is_quote(C) ->
+    parse_value(Tail, Decoder, <<>>, C);
+parse_value(<<Q, Tail/binary>>, Decoder, Value, Q) ->
+    {Decoder(Value), Tail};
+parse_value(<<C, Tail/binary>>, Decoder, Value, Q)
+        when ?is_attrvaluechar(C, Q) ->
+    parse_value(Tail, Decoder, <<Value/binary, C>>, Q);
+parse_value(_, _, _, _) ->
     erlang:error(xml_badattr).
