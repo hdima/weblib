@@ -3,6 +3,14 @@ XML parser
 
 - Parse entity references
 
+- Maybe tag callback should pass the following information?
+
+  {startElement, Uri, LocalName, QualifiedName, Attributes}
+
+  where: Attributes = [{Uri, Prefix, AttributeName, Value}]
+
+  and: {endElement, Uri, LocalName, QualifiedName}
+
 - Return line number and char for all errors
 
 - Pass location info to callback methods
