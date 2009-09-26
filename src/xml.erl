@@ -208,14 +208,9 @@ parse_term(<<"<!--", Tail/binary>>, _) ->
     {comment, skip_over(Tail, <<"-->">>)};
 parse_term(<<"<?", Tail/binary>>, _) ->
     {processing_instruction, skip_over(Tail, <<"?>">>)};
-parse_term(<<"<![CDATA[", Tail/binary>>, Decoder) ->
-    {Data, Tail2} = parse_data(Tail, Decoder, <<"]]>">>),
-    case Tail2 of
-        <<"]]>", Tail3/binary>> ->
-            {{characters, Data}, Tail3};
-        <<>> ->
-            throw(need_more_data)
-    end;
+parse_term(<<"<![CDATA[", Chunk/binary>>, Decoder) ->
+    {Data, Tail} = parse_cdata(Chunk, Decoder, <<>>),
+    {{characters, Data}, Tail};
 parse_term(<<"</", Tail/binary>>, Decoder) ->
     {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
     case skip_whitespace(Tail2) of
@@ -238,33 +233,44 @@ parse_term(<<"<", Tail/binary>>, Decoder) ->
             erlang:error(xml_badattr)
     end;
 parse_term(Chunk, Decoder) ->
-    {Data, Tail} = parse_data(Chunk, Decoder, <<"<">>),
+    {Data, Tail} = parse_data(Chunk, Decoder, <<>>),
     {{characters, Data}, Tail}.
 
 
 %%
 %% @doc Parse character data
-%% @spec parse_data(Chunk, Decoder, StopPattern) -> {Data, Tail}
+%% @spec parse_data(Chunk, Decoder, Acc) -> {Data, Tail}
 %%      Chunk = binary()
 %%      Decoder = function()
-%%      StopPattern = binary()
 %%      Acc = binary()
 %%      Data = string()
 %%      Tail = binary()
 %%
-parse_data(Chunk, Decoder, StopPattern) ->
-    parse_data(Chunk, Decoder, StopPattern, size(StopPattern), <<>>).
-
-parse_data(<<>>, Decoder, _, _, Data) ->
+parse_data(<<>>, Decoder, Data) ->
     % Don't try to return all possible data at once
     {Decoder(Data), <<>>};
-parse_data(Chunk, Decoder, StopPattern, Size, Data) ->
-    case Chunk of
-        <<StopPattern:Size/binary, _/binary>>=Tail ->
-            {Decoder(Data), Tail};
-        <<C, Tail/binary>> ->
-            parse_data(Tail, Decoder, StopPattern, Size, <<Data/binary, C>>)
-    end.
+parse_data(<<"<", _/binary>>=Tail, Decoder, Data) ->
+    {Decoder(Data), Tail};
+parse_data(<<C, Tail/binary>>, Decoder, Data) ->
+    parse_data(Tail, Decoder, <<Data/binary, C>>).
+
+
+%%
+%% @doc Parse CDATA characters
+%% @spec parse_cdata(Chunk, Decoder, Acc) -> {Data, Tail}
+%%      Chunk = binary()
+%%      Decoder = function()
+%%      Acc = binary()
+%%      Data = string()
+%%      Tail = binary()
+%%
+parse_cdata(<<>>, Decoder, Data) ->
+    % Don't try to return all possible data at once
+    {Decoder(Data), <<>>};
+parse_cdata(<<"]]>", Tail/binary>>, Decoder, Data) ->
+    {Decoder(Data), Tail};
+parse_cdata(<<C, Tail/binary>>, Decoder, Data) ->
+    parse_cdata(Tail, Decoder, <<Data/binary, C>>).
 
 
 %%
