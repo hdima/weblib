@@ -260,6 +260,16 @@ test_processing_instructions() ->
     ok.
 
 
+test_cdata() ->
+    [start_document,
+        {start_element, "tag", []},
+        {characters, "<tag>Data</tag>"},
+        {end_element, "tag"},
+        end_document] = get_trace(
+            <<"<tag><![CDATA[<tag>Data</tag>]]></tag>">>),
+    ok.
+
+
 test() ->
     test_constants(),
     test_errors(),
@@ -268,4 +278,5 @@ test() ->
     test_continuation(),
     test_comments(),
     test_processing_instructions(),
+    test_cdata(),
     ok.
