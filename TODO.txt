@@ -1,10 +1,6 @@
 General
 -------
 
-- Move docs to top level directory
-
-- Move tests to subdirectory of src
-
 
 XML parser
 ----------
