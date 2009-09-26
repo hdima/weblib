@@ -172,7 +172,10 @@ parse_element(Chunk, Info) ->
             end;
         {{characters, Data}, Tail} ->
             {ok, State} = B:characters(Data, Info#state.state),
-            parse_element(Tail, Info#state{state=State})
+            parse_element(Tail, Info#state{state=State});
+        {_, Tail} ->
+            % Skip other elements
+            parse_element(Tail, Info)
     catch
         throw:bad_name ->
             erlang:error(xml_badtag);
@@ -193,14 +196,15 @@ parse_element(Chunk, Info) ->
 %%          | {open_close_tag, Tag, Attributes}
 %%          | {close_tag, Tag}
 %%          | {characters, Data}
+%%          | comment
 %%      Tag = string()
 %%      Attributes = [{Key, Value} | ...]
 %%      Key = string()
 %%      Value = string()
 %%      Data = string()
 %%
-parse_term(<<"<!--", Tail/binary>>, Decoder) ->
-    parse_term(skip_over(Tail, <<"-->">>), Decoder);
+parse_term(<<"<!--", Tail/binary>>, _) ->
+    {comment, skip_over(Tail, <<"-->">>)};
 parse_term(<<"</", Tail/binary>>, Decoder) ->
     {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
     case skip_whitespace(Tail2) of
