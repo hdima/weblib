@@ -252,6 +252,14 @@ test_comments() ->
     ok.
 
 
+test_processing_instructions() ->
+    [start_document,
+        {start_element, "tag", []},
+        {end_element, "tag"},
+        end_document] = get_trace(<<"<tag><?target?></tag>">>),
+    ok.
+
+
 test() ->
     test_constants(),
     test_errors(),
@@ -259,4 +267,5 @@ test() ->
     test_simple_attributes(),
     test_continuation(),
     test_comments(),
+    test_processing_instructions(),
     ok.

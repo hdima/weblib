@@ -197,6 +197,7 @@ parse_element(Chunk, Info) ->
 %%          | {close_tag, Tag}
 %%          | {characters, Data}
 %%          | comment
+%%          | processing_instruction
 %%      Tag = string()
 %%      Attributes = [{Key, Value} | ...]
 %%      Key = string()
@@ -205,6 +206,8 @@ parse_element(Chunk, Info) ->
 %%
 parse_term(<<"<!--", Tail/binary>>, _) ->
     {comment, skip_over(Tail, <<"-->">>)};
+parse_term(<<"<?", Tail/binary>>, _) ->
+    {processing_instruction, skip_over(Tail, <<"?>">>)};
 parse_term(<<"</", Tail/binary>>, Decoder) ->
     {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
     case skip_whitespace(Tail2) of
