@@ -131,7 +131,6 @@ get_error(Chunk) ->
     Info.
 
 test_errors() ->
-    {xml_nodata, _} = get_error(<<>>),
     {xml_badtag, _} = get_error(<<"</>">>),
     {xml_badtag, _} = get_error(<<"< tag/>">>),
     {xml_badattr, _} = get_error(<<"<tag =/>">>),

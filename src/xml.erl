@@ -93,94 +93,102 @@ behaviour_info(_Other) ->
 %%      Chunk = binary()
 %%      Behaviour = atom()
 %%      Args = term()
-%%      Result = {continue, DocId} | {ok, State}
-%%      DocId = term()
+%%      Result = {continue, ParseState} | {ok, State}
+%%      ParseState = term()
 %%
-parse(<<>>, _, _) ->
-    erlang:error(xml_nodata);
 parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
     {ok, State} = Behaviour:start_document(Args),
     % TODO: Need to be replaced with the real one
     Decoder = fun (S) -> binary_to_list(S) end,
-    Info = #state{behaviour=Behaviour, state=State, decoder=Decoder},
-    parse_document(Chunk, Info).
+    ParseState = #state{behaviour=Behaviour, state=State, decoder=Decoder},
+    case Chunk of
+        <<>> ->
+            {continue, ParseState};
+        Chunk ->
+            parse_document(Chunk, ParseState)
+    end.
 
 
 %%
 %% @doc Continue parse XML
-%% @spec parse(Chunk, DocId) -> Result
+%% @spec parse(Chunk, ParseState) -> Result
 %%      Chunk = binary() | eof
-%%      DocId = term()
-%%      Result = {continue, DocId} | {ok, State)
+%%      ParseState = term()
+%%      Result = {continue, ParseState} | {ok, State)
 %%      Reason = term()
 %%
-parse(eof, #state{tail=(<<>>), stack=[]}=DocId) ->
-    {ok, DocId#state.state};
+parse(eof, #state{tail=(<<>>), stack=[]}=ParseState) ->
+    {ok, ParseState#state.state};
 parse(eof, _) ->
     erlang:error(xml_error);
-parse(Chunk, DocId) when is_binary(Chunk) ->
-    Tail = DocId#state.tail,
-    parse_document(<<Tail/binary, Chunk/binary>>, DocId#state{tail=(<<>>)}).
+parse(Chunk, ParseState) when is_binary(Chunk) ->
+    Tail = ParseState#state.tail,
+    parse_document(<<Tail/binary, Chunk/binary>>,
+        ParseState#state{tail=(<<>>)}).
 
 
 %%
 %% @doc Start or continue document parsing
-%% @spec parse_document(Chunk, Info) -> Result
+%% @spec parse_document(Chunk, ParseState) -> Result
 %%      Chunk = binary()
-%%      Info = term()
-%%      Result = {continue, NewInfo} | {ok, State}
-%%      NewInfo = term()
+%%      ParseState = term()
+%%      Result = {continue, NewParseState} | {ok, State}
+%%      NewParseState = term()
 %%      State = term()
 %%
-parse_document(Chunk, Info) ->
-    case parse_element(Chunk, Info) of
-        #state{stack=[], tail=(<<>>)}=NewInfo ->
-            B = NewInfo#state.behaviour,
-            B:end_document(NewInfo#state.state);
-        NewInfo ->
-            {continue, NewInfo}
+parse_document(Chunk, ParseState) ->
+    case parse_element(Chunk, ParseState) of
+        #state{stack=[], tail=(<<>>)}=NewParseState ->
+            B = NewParseState#state.behaviour,
+            B:end_document(NewParseState#state.state);
+        NewParseState ->
+            {continue, NewParseState}
     end.
 
 
 %%
 %% @doc Parse XML element
-%% @spec parse_element(Chunk, Info) -> NewInfo
+%% @spec parse_element(Chunk, ParseState) -> NewParseState
 %%      Chunk = binary()
-%%      Info = term()
-%%      NewInfo = term()
+%%      ParseState = term()
+%%      NewParseState = term()
 %%
-parse_element(<<>>, Info) ->
-    Info;
-parse_element(Chunk, Info) ->
-    B = Info#state.behaviour,
-    try parse_term(Chunk, Info#state.decoder) of
+parse_element(<<>>, ParseState) ->
+    ParseState;
+parse_element(Chunk, ParseState) ->
+    B = ParseState#state.behaviour,
+    try parse_term(Chunk, ParseState#state.decoder) of
         {{open_tag, Tag, Attributes}, Tail} ->
-            {ok, State} = B:start_element(Tag, Attributes, Info#state.state),
-            Stack = Info#state.stack,
-            parse_element(Tail, Info#state{state=State, stack=[Tag | Stack]});
+            {ok, State} = B:start_element(Tag, Attributes,
+                ParseState#state.state),
+            Stack = ParseState#state.stack,
+            parse_element(Tail, ParseState#state{state=State,
+                stack=[Tag | Stack]});
         {{open_close_tag, Tag, Attributes}, Tail} ->
-            {ok, State} = B:start_element(Tag, Attributes, Info#state.state),
+            {ok, State} = B:start_element(Tag, Attributes,
+                ParseState#state.state),
             {ok, State2} = B:end_element(Tag, State),
-            parse_element(Tail, Info#state{state=State2});
+            parse_element(Tail, ParseState#state{state=State2});
         {{close_tag, Tag}, Tail} ->
-            {ok, State} = B:end_element(Tag, Info#state.state),
-            case Info#state.stack of
+            {ok, State} = B:end_element(Tag, ParseState#state.state),
+            case ParseState#state.stack of
                 [Tag | Stack] ->
-                    parse_element(Tail, Info#state{state=State, stack=Stack});
+                    parse_element(Tail, ParseState#state{state=State,
+                        stack=Stack});
                 _ ->
                     erlang:error(xml_badtag)
             end;
         {{characters, Data}, Tail} ->
-            {ok, State} = B:characters(Data, Info#state.state),
-            parse_element(Tail, Info#state{state=State});
+            {ok, State} = B:characters(Data, ParseState#state.state),
+            parse_element(Tail, ParseState#state{state=State});
         {_, Tail} ->
             % Skip other elements
-            parse_element(Tail, Info)
+            parse_element(Tail, ParseState)
     catch
         throw:bad_name ->
             erlang:error(xml_badtag);
         throw:need_more_data ->
-            Info#state{tail=Chunk}
+            ParseState#state{tail=Chunk}
     end.
 
 
