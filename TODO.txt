@@ -1,6 +1,8 @@
 General
 -------
 
+- Use EUnit for tests
+
 
 XML parser
 ----------
