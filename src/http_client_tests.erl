@@ -27,9 +27,9 @@
 %%
 %% @doc Test for HTTP client
 %%
--module(test_http_client).
+-module(http_client_tests).
 
--export([test/0]).
+-include_lib("eunit/include/eunit.hrl").
 
 % Behaviour callbacks
 -export([handle_headers/4, handle_body/2]).
@@ -62,8 +62,9 @@ handle_body(Chunk, Pid) ->
 
 
 %%
-%% @doc Start test server
+%% Auxiliary functions
 %%
+
 start_test_server(Method, State, Response) ->
     {ok, Listen} = gen_tcp:listen(0,
         [binary, {ip, {127, 0, 0, 1}}, {active, false}, {packet, http_bin}]),
@@ -81,72 +82,62 @@ start_test_server(Method, State, Response) ->
     ok = gen_tcp:close(Listen).
 
 
-%%
-%% @doc Start test client
-%%
-start_test_client(Method, Port, State) ->
+start_test_client(Method, Port, {Server, _}=State) ->
     http_client:http_request(Method,
         "http://localhost:" ++ integer_to_list(Port),
-        [], test_http_client, State).
+        [], test_http_client, State),
+    Server ! eof.
 
 
-test_http_client([]) ->
-    ok;
-test_http_client([Pattern | Results]) ->
+get_trace(Method, State, Response) ->
+    Pid = self(),
+    spawn(fun () -> start_test_server(Method, {Pid, State}, Response) end),
+    get_callbacks([]).
+
+
+get_callbacks(List) ->
     receive
-        Pattern ->
-            test_http_client(Results)
+        eof ->
+            lists:reverse(List);
+        Info ->
+            get_callbacks([Info | List])
     after
         3000 ->
             error
     end.
 
 
-test_get_request() ->
-    Pid = self(),
-    Response = <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>,
-    spawn(fun () -> start_test_server('GET', {Pid, ok}, Response) end),
-    ok = test_http_client([
+%%
+%% Tests
+%%
+
+get_request_test_() ->
+    ?_assertEqual([
         {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>},
             [{'Content-Length', <<"2">>}]},
         {handle_body, <<"OK">>},
         {handle_body, eof}
-    ]).
+    ], get_trace('GET', ok,
+        <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>)).
 
 
-test_stop_response() ->
-    Pid = self(),
-    Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
-    spawn(fun () -> start_test_server('GET', {Pid, stop}, Response) end),
-    ok = test_http_client([
+stop_response_test_() ->
+    ?_assertEqual([
         {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, eof}
-    ]).
+    ], get_trace('GET', stop, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
 
 
-test_responses_without_content_length() ->
-    Pid = self(),
-    Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
-    spawn(fun () -> start_test_server('GET', {Pid, ok}, Response) end),
-    ok = test_http_client([
+responses_without_content_length_test_() ->
+    ?_assertEqual([
         {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, <<"OK">>},
         {handle_body, eof}
-    ]).
+    ], get_trace('GET', ok, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
 
-test_head_request() ->
-    Pid = self(),
-    Response = <<"HTTP/1.0 200 OK\r\n\r\nOK">>,
-    spawn(fun () -> start_test_server('HEAD', {Pid, ok}, Response) end),
-    ok = test_http_client([
+
+head_request_test_() ->
+    ?_assertEqual([
         {handle_headers, 'HEAD', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, eof}
-    ]).
-
-
-test() ->
-    test_get_request(),
-    test_stop_response(),
-    test_responses_without_content_length(),
-    test_head_request(),
-    ok.
+    ], get_trace('HEAD', ok, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
