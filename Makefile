@@ -37,7 +37,7 @@ ebin/%.beam: src/%.erl
 test: compile
 	erl -noshell -pa ebin -s newslib test -s init stop
 
-docs: compile
+doc: compile
 	erl -noshell -pa ebin -s newslib generate_docs -s init stop
 
 clean:

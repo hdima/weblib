@@ -114,7 +114,7 @@ parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
 %% @spec parse(Chunk, ParseState) -> Result
 %%      Chunk = binary() | eof
 %%      ParseState = term()
-%%      Result = {continue, ParseState} | {ok, State)
+%%      Result = {continue, ParseState} | {ok, State}
 %%      Reason = term()
 %%
 parse(eof, #state{tail=(<<>>), stack=[]}=ParseState) ->
@@ -207,7 +207,7 @@ parse_element(Chunk, ParseState) ->
 %%          | comment
 %%          | processing_instruction
 %%      Tag = string()
-%%      Attributes = [{Key, Value} | ...]
+%%      Attributes = [{Key, Value}]
 %%      Key = string()
 %%      Value = string()
 %%      Data = string()
@@ -340,10 +340,11 @@ parse_name(Tail, Decoder, Name) ->
 %%
 %% @doc Parse tag attributes
 %% @throws need_more_data
-%% @spec parse_attributes(Chunk, Acc) -> {Attributes, Tail}
+%% @spec parse_attributes(Chunk, Decoder, Acc) -> {Attributes, Tail}
 %%      Chunk = binary()
+%%      Decoder = function()
 %%      Acc = list()
-%%      Attributes = [{Key, Value} | ...]
+%%      Attributes = [{Key, Value}]
 %%      Key = string()
 %%      Value = string()
 %%      Tail = binary()
@@ -390,7 +391,7 @@ parse_eq(Chunk) ->
 %%      Chunk = binary()
 %%      Decoder = function()
 %%      Acc = binary()
-%%      Quote = none | $" | $'
+%%      Quote = none | 34 | 39
 %%      Value = string()
 %%      Tail = binary()
 %%

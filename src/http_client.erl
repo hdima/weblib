@@ -71,7 +71,7 @@ behaviour_info(_Other) ->
 %% @spec http_request(Method, Url, Headers, Behaviour, Args) -> ok
 %%      Method = 'GET' | 'HEAD'
 %%      Url = string()
-%%      Headers = [{Key, Value} | ...]
+%%      Headers = [{Key, Value}]
 %%      Key = atom()
 %%      Value = binary()
 %%      Behaviour = atom()
@@ -122,8 +122,8 @@ send_request(Sock, {http, Host, Port, Path},
 
 %%
 %% @doc Normalize HTTP headers
-%% @spec http_headers(Headers, Host, []) -> [{binary(), binary()} | ...]
-%%      Headers = [{atom(), binary()} | ...]
+%% @spec http_headers(Headers, Host, []) -> [{binary(), binary()}]
+%%      Headers = [{atom(), binary()}]
 %%      Host = {http, list(), integer()}
 %%
 http_headers([{'Host', Host} | Headers], _, Collected) ->
@@ -151,7 +151,7 @@ http_headers([], {http, Host, Port}, Collected) ->
 %% @spec create_request(Method, Path, Headers) -> Request
 %%      Method = 'GET'
 %%      Path = binary()
-%%      Headers = [{Key, Value} | ...]
+%%      Headers = [{Key, Value}]
 %%      Key = atom()
 %%      Value = binary()
 %%
@@ -172,7 +172,7 @@ format_headers([{Key, Value} | Headers], Data) ->
 
 %%
 %% @doc Receive HTTP response
-%% @spec recv_response(Sock, Method, Behaviour, Args)
+%% @spec recv_response(Sock, Method, Behaviour, Args) -> term()
 %%      Sock = socket()
 %%      Method = atom()
 %%      Behaviour = atom()
