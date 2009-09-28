@@ -1,7 +1,7 @@
 General
 -------
 
-- Use EUnit for tests
+- Rename newslib to newslib_app?
 
 
 XML parser
