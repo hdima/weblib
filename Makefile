@@ -40,6 +40,9 @@ test: compile
 doc: compile
 	erl -noshell -pa ebin -s newslib generate_docs -s init stop
 
+check:
+	dialyzer --src -c src
+
 clean:
 	rm -f ebin/*.beam erl_crash.dump \
 		src/doc/*.html src/doc/*.css src/doc/*.png src/doc/edoc-info
