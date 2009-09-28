@@ -28,14 +28,17 @@
 %% @doc Auxiliary functions
 %%
 -module(newslib).
--export([test/0, generate_docs/0]).
+-export([test/0, test/1, generate_docs/0]).
 
 
 %%
 %% @doc Run all test in the library
 %%
 test() ->
-    eunit:test({application, newslib}).
+    test([]).
+
+test(Args) ->
+    eunit:test({application, newslib}, Args).
 
 
 %%
