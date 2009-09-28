@@ -86,16 +86,13 @@ check_headers(Socket, []) ->
     {ok, http_eoh} = gen_tcp:recv(Socket, 0, 3000);
 check_headers(Socket, [{Key, Value} | Headers]) ->
     K = atom_to_binary(Key, latin1),
-    case gen_tcp:recv(Socket, 0, 3000) of
-        {ok, {http_header, _, K, _, Value}} ->
-            check_headers(Socket, Headers)
-    end.
+    {ok, {http_header, _, K, _, Value}} = gen_tcp:recv(Socket, 0, 3000),
+    check_headers(Socket, Headers).
 
 
 start_test_client(Method, Port, Headers, {Server, _}=State) ->
     http_client:http_request(Method,
-        "http://localhost:" ++ integer_to_list(Port),
-        Headers, test_http_client, State),
+        "http://localhost:" ++ integer_to_list(Port), Headers, ?MODULE, State),
     Server ! eof.
 
 
