@@ -130,7 +130,7 @@ http_headers([{'Host', Host} | Headers], _, Collected) ->
     http_headers(Headers, seen, [{<<"Host">>, Host} | Collected]);
 http_headers([{Key, Value} | Headers], Host, Collected) ->
     http_headers(Headers, Host,
-        [{atom_to_binary(Key, ascii), Value} | Collected]);
+        [{atom_to_binary(Key, latin1), Value} | Collected]);
 http_headers([], seen, Collected) ->
     Collected;
 http_headers([], {http, Host, Port}, Collected) ->

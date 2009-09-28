@@ -65,33 +65,44 @@ handle_body(Chunk, Pid) ->
 %% Auxiliary functions
 %%
 
-start_test_server(Method, State, Response) ->
+start_test_server(Method, Headers, State, Response) ->
     {ok, Listen} = gen_tcp:listen(0,
         [binary, {ip, {127, 0, 0, 1}}, {active, false}, {packet, http_bin}]),
     {ok, Port} = inet:port(Listen),
-    spawn(fun () -> start_test_client(Method, Port, State) end),
+    spawn(fun () -> start_test_client(Method, Port, Headers, State) end),
     {ok, Socket} = gen_tcp:accept(Listen, 3000),
     {ok, {http_request, Method, {abs_path, <<"/">>}, {1, 0}}}
         = gen_tcp:recv(Socket, 0, 3000),
     {ok, {http_header, _, 'Host', _, <<"localhost:",_/binary>>}}
         = gen_tcp:recv(Socket, 0, 3000),
-    {ok, http_eoh} = gen_tcp:recv(Socket, 0, 3000),
+    check_headers(Socket, Headers),
     ok = inet:setopts(Socket, [{packet, raw}]),
     ok = gen_tcp:send(Socket, Response),
     ok = gen_tcp:close(Socket),
     ok = gen_tcp:close(Listen).
 
 
-start_test_client(Method, Port, {Server, _}=State) ->
+check_headers(Socket, []) ->
+    {ok, http_eoh} = gen_tcp:recv(Socket, 0, 3000);
+check_headers(Socket, [{Key, Value} | Headers]) ->
+    K = atom_to_binary(Key, latin1),
+    case gen_tcp:recv(Socket, 0, 3000) of
+        {ok, {http_header, _, K, _, Value}} ->
+            check_headers(Socket, Headers)
+    end.
+
+
+start_test_client(Method, Port, Headers, {Server, _}=State) ->
     http_client:http_request(Method,
         "http://localhost:" ++ integer_to_list(Port),
-        [], test_http_client, State),
+        Headers, test_http_client, State),
     Server ! eof.
 
 
-get_trace(Method, State, Response) ->
+get_trace(Method, Headers, State, Response) ->
     Pid = self(),
-    spawn(fun () -> start_test_server(Method, {Pid, State}, Response) end),
+    spawn(fun () -> start_test_server(Method, Headers,
+        {Pid, State}, Response) end),
     get_callbacks([]).
 
 
@@ -117,7 +128,17 @@ get_request_test_() ->
             [{'Content-Length', <<"2">>}]},
         {handle_body, <<"OK">>},
         {handle_body, eof}
-    ], get_trace('GET', ok,
+    ], get_trace('GET', [], ok,
+        <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>)).
+
+
+request_headers_test_() ->
+    ?_assertEqual([
+        {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>},
+            [{'Content-Length', <<"2">>}]},
+        {handle_body, <<"OK">>},
+        {handle_body, eof}
+    ], get_trace('GET', [{'Key', <<"value">>}], ok,
         <<"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK">>)).
 
 
@@ -125,7 +146,7 @@ stop_response_test_() ->
     ?_assertEqual([
         {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, eof}
-    ], get_trace('GET', stop, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
+    ], get_trace('GET', [], stop, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
 
 
 responses_without_content_length_test_() ->
@@ -133,11 +154,11 @@ responses_without_content_length_test_() ->
         {handle_headers, 'GET', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, <<"OK">>},
         {handle_body, eof}
-    ], get_trace('GET', ok, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
+    ], get_trace('GET', [], ok, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
 
 
 head_request_test_() ->
     ?_assertEqual([
         {handle_headers, 'HEAD', {{1, 0}, 200, <<"OK">>}, []},
         {handle_body, eof}
-    ], get_trace('HEAD', ok, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
+    ], get_trace('HEAD', [], ok, <<"HTTP/1.0 200 OK\r\n\r\nOK">>)).
