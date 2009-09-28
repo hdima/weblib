@@ -35,23 +35,7 @@
 %% @doc Run all test in the library
 %%
 test() ->
-    test([
-        test_url,
-        test_http_client,
-        test_xml
-    ]).
-
-test([Module | Modules]) ->
-    io:format("~p: ", [Module]),
-    try Module:test() of
-        _ ->
-            io:format("OK~n")
-    catch _:Error ->
-        io:format("ERROR: ~p: ~p~n", [Error, erlang:get_stacktrace()])
-    end,
-    test(Modules);
-test([]) ->
-    ok.
+    eunit:test({application, newslib}, [verbose]).
 
 
 %%
