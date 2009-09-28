@@ -35,7 +35,7 @@
 %% @doc Run all test in the library
 %%
 test() ->
-    eunit:test({application, newslib}, [verbose]).
+    eunit:test({application, newslib}).
 
 
 %%
