@@ -35,10 +35,10 @@ ebin/%.beam: src/%.erl
 	erlc -Wall -I include -pa ebin -o ebin/ $<
 
 test: compile
-	erl -noshell -pa ebin -s test_newslib test -s init stop
+	erl -noshell -pa ebin -s newslib test -s init stop
 
 docs: compile
-	erl -noshell -pa ebin -s test_newslib generate_docs -s init stop
+	erl -noshell -pa ebin -s newslib generate_docs -s init stop
 
 clean:
 	rm -f ebin/*.beam erl_crash.dump \

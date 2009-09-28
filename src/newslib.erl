@@ -25,9 +25,9 @@
 %% ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 %% POSSIBILITY OF SUCH DAMAGE.
 %%
-%% @doc Library tests
+%% @doc Auxiliary functions
 %%
--module(test_newslib).
+-module(newslib).
 -export([test/0, generate_docs/0]).
 
 
