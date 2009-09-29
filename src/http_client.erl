@@ -29,10 +29,11 @@
 %%
 %% Callback module interface:
 %%
+%% <pre>
 %%      handle_headers(Method, Status, Headers, Args) -> Result
 %%          Status = {Version, Status, Comment}
 %%          Version = {Major=int(), Minor=int()}
-%%          Headers = [{Key, Value} | ...]
+%%          Headers = [{Key, Value}]
 %%          Key = atom() | binary()
 %%          Value = binary()
 %%          Args = term()
@@ -41,6 +42,7 @@
 %%      handle_body(Chunk, State) -> Result
 %%          Chunk = binary() | eof | closed
 %%          Result = {ok, NewState} | {stop, State}
+%% </pre>
 %%
 -module(http_client).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
@@ -59,6 +61,9 @@
 
 %%
 %% @doc Behaviour information
+%% @spec behaviour_info(callbacks) -> Callbacks
+%%      Callbacks = [{module(), Arity}]
+%%      Arity = integer()
 %%
 behaviour_info(callbacks) ->
     [{handle_headers, 4}, {handle_body, 2}];
@@ -74,7 +79,7 @@ behaviour_info(_Other) ->
 %%      Headers = [{Key, Value}]
 %%      Key = atom()
 %%      Value = binary()
-%%      Behaviour = atom()
+%%      Behaviour = module()
 %%      Args = term()
 %%
 http_request(Method, Url, Headers, Behaviour, Args) ->
@@ -124,7 +129,7 @@ send_request(Sock, {http, Host, Port, Path},
 %% @doc Normalize HTTP headers
 %% @spec http_headers(Headers, Host, []) -> [{binary(), binary()}]
 %%      Headers = [{atom(), binary()}]
-%%      Host = {http, list(), integer()}
+%%      Host = {http, list(), integer()} | seen
 %%
 http_headers([{'Host', Host} | Headers], _, Collected) ->
     http_headers(Headers, seen, [{<<"Host">>, Host} | Collected]);
@@ -149,11 +154,12 @@ http_headers([], {http, Host, Port}, Collected) ->
 %%
 %% @doc Create and return HTTP request
 %% @spec create_request(Method, Path, Headers) -> Request
-%%      Method = 'GET'
-%%      Path = binary()
+%%      Method = atom()
+%%      Path = string()
 %%      Headers = [{Key, Value}]
 %%      Key = atom()
 %%      Value = binary()
+%%      Request = binary()
 %%
 create_request(Method, Path, Headers)
         when Method =:= 'GET'; Method =:= 'HEAD' ->
@@ -175,9 +181,11 @@ format_headers([{Key, Value} | Headers], Data) ->
 %% @spec recv_response(Sock, Method, Behaviour, Args) -> term()
 %%      Sock = socket()
 %%      Method = atom()
-%%      Behaviour = atom()
+%%      Behaviour = module()
 %%      Args = term()
 %%
+-spec recv_response(term(), atom(), module(), term()) -> no_return().
+
 recv_response(Sock, Method, Behaviour, Args) ->
     {Status, Headers, Size} = recv_headers(Sock, none, [], unknown), 
     case Behaviour:handle_headers(Method, Status, Headers, Args) of
@@ -199,6 +207,23 @@ recv_response(Sock, Method, Behaviour, Args) ->
             throw(stop)
     end.
 
+
+%%
+%% @doc Receive HTTP headers
+%% @spec recv_headers(Sock, HTTPHeader, Headers, Size) -> none()
+%%      Sock = socket()
+%%      HTTPHeader = none | {Version, Status, Comment}
+%%      Version = tuple()
+%%      Status = integer()
+%%      Comment = binary()
+%%      Headers = [{Key, Value}]
+%%      Key = atom() | binary()
+%%      Value = binary()
+%%      Size = integer() | unknown
+%%
+-spec recv_headers(term(), none | tuple(), list(),
+    integer() | unknown) -> no_return().
+
 recv_headers(Sock, HTTPHeader, Headers, Size) ->
     case gen_tcp:recv(Sock, 0, ?RECV_TIMEOUT) of
         {ok, {http_response, Version, Status, Comment}} ->
@@ -217,6 +242,15 @@ recv_headers(Sock, HTTPHeader, Headers, Size) ->
             erlang:error(http_receive_error, [Reason])
     end.
 
+
+%%
+%% @doc Receive HTTP body data
+%% @spec recv_data(Sock, Size, Behaviour, State) -> none()
+%%      Sock = socket()
+%%      Size = integer() | unknown
+%%      Behaviour = module()
+%%      State = term()
+%%
 recv_data(_Sock, 0, Behaviour, State) ->
     Behaviour:handle_body(eof, State);
 recv_data(Sock, Size, Behaviour, State) ->

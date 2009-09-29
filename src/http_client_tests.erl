@@ -65,6 +65,8 @@ handle_body(Chunk, Pid) ->
 %% Auxiliary functions
 %%
 
+-spec start_test_server(atom(), list(), term(), binary()) -> no_return().
+
 start_test_server(Method, Headers, State, Response) ->
     {ok, Listen} = gen_tcp:listen(0,
         [binary, {ip, {127, 0, 0, 1}}, {active, false}, {packet, http_bin}]),
