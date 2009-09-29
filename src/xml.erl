@@ -29,6 +29,7 @@
 %%
 %% Callbak module interface:
 %%
+%% <pre>
 %%      start_document(Args) -> Result
 %%          Args = term()
 %%          Result = {ok, State}
@@ -54,6 +55,7 @@
 %%          Chunk = string()
 %%          State = term()
 %%          Result = {ok, State}
+%% </pre>
 %%
 -module(xml).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
@@ -79,6 +81,9 @@
 
 %%
 %% @doc Behaviour information
+%% @spec behaviour_info(callbacks) -> Callbacks
+%%      Callbacks = [{module(), Arity}]
+%%      Arity = integer()
 %%
 behaviour_info(callbacks) ->
     [{start_document, 1}, {end_document, 1}, {start_element, 3},
@@ -91,7 +96,7 @@ behaviour_info(_Other) ->
 %% @doc Start parse XML
 %% @spec parse(Chunk, Behaviour, Args) -> Result
 %%      Chunk = binary()
-%%      Behaviour = atom()
+%%      Behaviour = module()
 %%      Args = term()
 %%      Result = {continue, ParseState} | {ok, State}
 %%      ParseState = term()

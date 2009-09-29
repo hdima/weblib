@@ -29,10 +29,12 @@
 %%
 %% Callbak module interface:
 %%
+%% <pre>
 %%      news_channel(ChannelInfo, Args) -> Result
 %%          ChannelInfo = #newsChannel
 %%          Args = term()
 %%          Result = {ok, State} | {stop, State}
+%% </pre>
 %%
 -module(feedparser).
 
@@ -47,6 +49,9 @@
 
 %%
 %% @doc Behaviour information
+%% @spec behaviour_info(callbacks) -> Callbacks
+%%      Callbacks = [{module(), Arity}]
+%%      Arity = integer()
 %%
 behaviour_info(callbacks) ->
     [{news_channel, 2}];
