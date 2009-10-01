@@ -29,6 +29,8 @@ XML parser
 
 - Pass location info to callback methods
 
+- Add independent callback interface (or just function) to request decoder
+
 
 FeedParser
 ----------
