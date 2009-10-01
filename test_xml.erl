@@ -2,7 +2,7 @@
 
 -export([parse_file/1]).
 
--behaviour(xml).
+-behaviour(simplexml).
 
 -export([start_document/1, end_document/1, start_element/3, end_element/2,
     characters/2]).
@@ -10,21 +10,21 @@
 
 parse_file(Filename) ->
     {ok, File} = file:open(Filename, [read, raw, binary]),
-    {continue, ParseState} = xml:parse(<<>>, ?MODULE, none),
+    {continue, ParseState} = simplexml:parse(<<>>, ?MODULE, none),
     read_file(File, ParseState).
 
 
 read_file(File, ParseState) ->
     case file:read(File, 4096) of
         {ok, Data} ->
-            case xml:parse(Data, ParseState) of
+            case simplexml:parse(Data, ParseState) of
                 {continue, NewParseState} ->
                     read_file(File, NewParseState);
                 {ok, _} ->
                     file:close(File)
             end;
         eof ->
-            xml:parse(eof, ParseState),
+            simplexml:parse(eof, ParseState),
             file:close(File)
     end.
 

@@ -57,7 +57,7 @@
 %%          Result = {ok, State}
 %% </pre>
 %%
--module(xml).
+-module(simplexml).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
 -vsn("0.3").
 
@@ -67,7 +67,7 @@
 %% Behaviour information
 -export([behaviour_info/1]).
 
--include("xml.hrl").
+-include("simplexml.hrl").
 
 %% Parser state
 -record(state, {

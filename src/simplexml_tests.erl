@@ -27,17 +27,17 @@
 %%
 %% @doc Tests for relaxed XML module
 %%
--module(xml_tests).
+-module(simplexml_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
--behaviour(xml).
+-behaviour(simplexml).
 
 %% Behaviour callbacks
 -export([start_document/1, end_document/1, start_element/3, end_element/2,
     characters/2]).
 
--include("xml.hrl").
+-include("simplexml.hrl").
 
 
 %%
@@ -85,7 +85,7 @@ get_char_type(_) ->
 
 get_trace(Chunk) ->
     Server = self(),
-    {ok, {Server, N}} = xml:parse(Chunk, ?MODULE, {Server, 0}),
+    {ok, {Server, N}} = simplexml:parse(Chunk, ?MODULE, {Server, 0}),
     get_callbacks(N).
 
 
@@ -112,10 +112,10 @@ get_chunked_trace(Chunks) ->
 
 get_chunked_trace([Chunk | Chunks], none) ->
     Server = self(),
-    {continue, DocId} = xml:parse(Chunk, ?MODULE, {Server, 0}),
+    {continue, DocId} = simplexml:parse(Chunk, ?MODULE, {Server, 0}),
     get_chunked_trace(Chunks, {DocId, Server});
 get_chunked_trace([Chunk | Chunks], {DocId, Server}) ->
-    case xml:parse(Chunk, DocId) of
+    case simplexml:parse(Chunk, DocId) of
         {continue, NewId} ->
             get_chunked_trace(Chunks, {NewId, Server});
         {ok, {Server, N}} ->
@@ -146,14 +146,14 @@ constants_test_() -> [
 
 
 errors_test_() -> [
-    ?_assertError(xml_badtag, xml:parse(<<"</>">>, ?MODULE, [])),
-    ?_assertError(xml_badtag, xml:parse(<<"< tag/>">>, ?MODULE, [])),
-    ?_assertError(xml_badattr, xml:parse(<<"<tag =/>">>, ?MODULE, [])),
-    ?_assertError(xml_badattr, xml:parse(<<"<tag name/>">>, ?MODULE, [])),
+    ?_assertError(xml_badtag, simplexml:parse(<<"</>">>, ?MODULE, [])),
+    ?_assertError(xml_badtag, simplexml:parse(<<"< tag/>">>, ?MODULE, [])),
+    ?_assertError(xml_badattr, simplexml:parse(<<"<tag =/>">>, ?MODULE, [])),
+    ?_assertError(xml_badattr, simplexml:parse(<<"<tag name/>">>, ?MODULE, [])),
     ?_assertError(xml_badattr,
-        xml:parse(<<"<tag name name=/>">>, ?MODULE, [])),
+        simplexml:parse(<<"<tag name name=/>">>, ?MODULE, [])),
     ?_assertError(xml_badattr,
-        xml:parse(<<"<tag n1='v1'n2='v2'/>">>, ?MODULE, []))
+        simplexml:parse(<<"<tag n1='v1'n2='v2'/>">>, ?MODULE, []))
     ].
 
 

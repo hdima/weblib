@@ -29,7 +29,7 @@ all: compile
 
 compile: behaviours $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
 
-behaviours: ebin/http_client.beam ebin/xml.beam
+behaviours: ebin/http_client.beam ebin/simplexml.beam
 
 ebin/%.beam: src/%.erl
 	erlc -Wall -I include -I deps/*/include -pa deps/*/ebin -pa ebin \
