@@ -25,7 +25,7 @@ XML parser
 
     and: {endElement, Uri, LocalName, QualifiedName}
 
-- Return line number and char for all errors
+- Return line and column numbers with all errors
 
 - Pass location info to callback methods
 
