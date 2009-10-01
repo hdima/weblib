@@ -30,9 +30,10 @@
 %% Callbak module interface:
 %%
 %% <pre>
-%%      start_document(Args) -> Result
-%%          Args = term()
-%%          Result = {ok, State}
+%%      start_document(State) -> Result
+%%          State = term()
+%%          Result = {ok, NewState}
+%%          NewState = term()
 %%
 %%      end_document(State) -> Result
 %%          State = term()
@@ -94,18 +95,19 @@ behaviour_info(_Other) ->
 
 %%
 %% @doc Start parse XML
-%% @spec parse(Chunk, Behaviour, Args) -> Result
+%% @spec parse(Chunk, Behaviour, State) -> Result
 %%      Chunk = binary()
 %%      Behaviour = module()
-%%      Args = term()
-%%      Result = {continue, ParseState} | {ok, State}
+%%      State = term()
+%%      Result = {continue, ParseState} | {ok, NewState}
 %%      ParseState = term()
+%%      NewState = term()
 %%
-parse(Chunk, Behaviour, Args) when is_binary(Chunk) ->
-    {ok, State} = Behaviour:start_document(Args),
+parse(Chunk, Behaviour, State) when is_binary(Chunk) ->
+    {ok, NewState} = Behaviour:start_document(State),
     % TODO: Need to be replaced with the real one
     Decoder = fun (S) -> binary_to_list(S) end,
-    ParseState = #state{behaviour=Behaviour, state=State, decoder=Decoder},
+    ParseState = #state{behaviour=Behaviour, state=NewState, decoder=Decoder},
     case Chunk of
         <<>> ->
             {continue, ParseState};
