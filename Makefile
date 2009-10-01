@@ -32,16 +32,17 @@ compile: behaviours $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
 behaviours: ebin/http_client.beam ebin/xml.beam
 
 ebin/%.beam: src/%.erl
-	erlc -Wall -I include -pa ebin -o ebin/ $<
+	erlc -Wall -I include -I deps/*/include -pa deps/*/ebin -pa ebin \
+		-o ebin/ $<
 
 test: compile
-	erl -noshell -pa ebin -s newslib test -s init stop
+	erl -noshell -pa deps/*/ebin -pa ebin -s newslib test -s init stop
 
 test-verbose: compile
-	erl -noshell -pa ebin -s newslib test verbose -s init stop
+	erl -noshell -pa deps/*/ebin -pa ebin -s newslib test verbose -s init stop
 
 doc: compile
-	erl -noshell -pa ebin -s newslib generate_docs -s init stop
+	erl -noshell -pa deps/*/ebin -pa ebin -s newslib generate_docs -s init stop
 
 check:
 	dialyzer --src -c src
