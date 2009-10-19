@@ -3,6 +3,8 @@ General
 
 - Rename newslib to newslib_app?
 
+- Place *.app in ebin/
+
 
 XML parser
 ----------
