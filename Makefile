@@ -31,7 +31,7 @@ compile: behaviours $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
 
 behaviours: ebin/http_client.beam ebin/simplexml.beam
 
-ebin/%.beam: src/%.erl
+ebin/%.beam: src/%.erl $(wildcard include/*.hrl)
 	erlc -Wall -I include -I deps/*/include -pa deps/*/ebin -pa ebin \
 		-o ebin/ $<
 
@@ -45,7 +45,7 @@ doc: compile
 	erl -noshell -pa deps/*/ebin -pa ebin -s newslib generate_docs -s init stop
 
 check:
-	dialyzer --src -c src
+	dialyzer -I include --src -c src
 
 clean:
 	rm -f ebin/*.beam erl_crash.dump \

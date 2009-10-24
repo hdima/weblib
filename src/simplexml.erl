@@ -30,40 +30,45 @@
 %% Callbak module interface:
 %%
 %% <pre>
-%%      start_document(State) -> Result
+%%      start_document(Location, State) -> Result
+%%          Location = record()
 %%          State = term()
 %%          Result = {ok, NewState}
 %%          NewState = term()
 %%
-%%      end_document(State) -> Result
+%%      end_document(Location, State) -> Result
+%%          Location = record()
 %%          State = term()
 %%          Result = {ok, State}
 %%
-%%      start_element(Tag, Attributes, State) -> Result
+%%      start_element(Tag, Attributes, Location, State) -> Result
 %%          Tag = string()
 %%          Attributes = [{Key, Value} | ...]
 %%          Key = string()
 %%          Value = string()
+%%          Location = record()
 %%          State = term()
 %%          Result = {ok, State}
 %%
-%%      end_element(Tag, State) -> Result
+%%      end_element(Tag, Location, State) -> Result
 %%          Tag = string()
+%%          Location = record()
 %%          State = term()
 %%          Result = {ok, State}
 %%
-%%      characters(Chunk, State) -> Result
+%%      characters(Chunk, Location, State) -> Result
 %%          Chunk = string()
+%%          Location = record()
 %%          State = term()
 %%          Result = {ok, State}
 %% </pre>
 %%
 -module(simplexml).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
--vsn("0.3").
+-vsn("0.4").
 
 %% Public interface
--export([parse/3, parse/2]).
+-export([parse/4, parse/2]).
 
 %% Behaviour information
 -export([behaviour_info/1]).
@@ -74,6 +79,7 @@
 -record(state, {
     behaviour,
     state,
+    location,
     tail=(<<>>),
     stack=[],
     decoder
@@ -87,123 +93,137 @@
 %%      Arity = integer()
 %%
 behaviour_info(callbacks) ->
-    [{start_document, 1}, {end_document, 1}, {start_element, 3},
-        {end_element, 2}, {characters, 2}];
+    [{start_document, 2}, {end_document, 2}, {start_element, 4},
+        {end_element, 3}, {characters, 3}];
 behaviour_info(_Other) ->
     undefined.
 
 
 %%
 %% @doc Start parse XML
-%% @spec parse(Chunk, Behaviour, State) -> Result
+%% @spec parse(Chunk, Source, Behaviour, State) -> Result
 %%      Chunk = binary()
+%%      Source = string() | unknown
 %%      Behaviour = module()
 %%      State = term()
-%%      Result = {continue, ParseState} | {ok, NewState}
-%%      ParseState = term()
+%%      Result = {continue, ParserState} | {ok, NewState}
+%%      ParserState = term()
 %%      NewState = term()
 %%
-parse(Chunk, Behaviour, State) when is_binary(Chunk) ->
-    {ok, NewState} = Behaviour:start_document(State),
+parse(Chunk, Source, Behaviour, State) when is_binary(Chunk) ->
+    Location = #location{source=Source},
+    {ok, NewState} = Behaviour:start_document(Location, State),
     % TODO: Need to be replaced with the real one
     Decoder = fun (S) -> binary_to_list(S) end,
-    ParseState = #state{behaviour=Behaviour, state=NewState, decoder=Decoder},
+    ParserState = #state{behaviour=Behaviour, state=NewState, decoder=Decoder,
+        location=Location},
     case Chunk of
         <<>> ->
-            {continue, ParseState};
+            {continue, ParserState};
         Chunk ->
-            parse_document(Chunk, ParseState)
+            parse_document(Chunk, ParserState)
     end.
 
 
 %%
 %% @doc Continue parse XML
-%% @spec parse(Chunk, ParseState) -> Result
+%% @spec parse(Chunk, ParserState) -> Result
 %%      Chunk = binary() | eof
-%%      ParseState = term()
-%%      Result = {continue, ParseState} | {ok, State}
+%%      ParserState = term()
+%%      Result = {continue, ParserState} | {ok, State}
 %%      Reason = term()
 %%
-parse(eof, #state{tail=(<<>>), stack=[]}=ParseState) ->
-    {ok, ParseState#state.state};
-parse(eof, _) ->
-    erlang:error(xml_error);
-parse(Chunk, ParseState) when is_binary(Chunk) ->
-    Tail = ParseState#state.tail,
+parse(eof, #state{tail=(<<>>), stack=[]}=ParserState) ->
+    {ok, ParserState#state.state};
+parse(eof, ParserState) ->
+    erlang:error({incomplete, ParserState#state.location});
+parse(Chunk, ParserState) when is_binary(Chunk) ->
+    Tail = ParserState#state.tail,
     parse_document(<<Tail/binary, Chunk/binary>>,
-        ParseState#state{tail=(<<>>)}).
+        ParserState#state{tail=(<<>>)}).
 
 
 %%
 %% @doc Start or continue document parsing
-%% @spec parse_document(Chunk, ParseState) -> Result
+%% @spec parse_document(Chunk, ParserState) -> Result
 %%      Chunk = binary()
-%%      ParseState = term()
-%%      Result = {continue, NewParseState} | {ok, State}
-%%      NewParseState = term()
+%%      ParserState = term()
+%%      Result = {continue, NewParserState} | {ok, State}
+%%      NewParserState = term()
 %%      State = term()
 %%
-parse_document(Chunk, ParseState) ->
-    case parse_element(Chunk, ParseState) of
-        #state{stack=[], tail=(<<>>)}=NewParseState ->
-            B = NewParseState#state.behaviour,
-            B:end_document(NewParseState#state.state);
-        NewParseState ->
-            {continue, NewParseState}
+parse_document(Chunk, ParserState) ->
+    case parse_element(Chunk, ParserState) of
+        #state{stack=[], tail=(<<>>)}=NewParserState ->
+            B = NewParserState#state.behaviour,
+            B:end_document(NewParserState#state.location,
+                NewParserState#state.state);
+        NewParserState ->
+            {continue, NewParserState}
     end.
 
 
 %%
 %% @doc Parse XML element
-%% @spec parse_element(Chunk, ParseState) -> NewParseState
+%% @spec parse_element(Chunk, ParserState) -> NewParserState
 %%      Chunk = binary()
-%%      ParseState = term()
-%%      NewParseState = term()
+%%      ParserState = term()
+%%      NewParserState = term()
 %%
-parse_element(<<>>, ParseState) ->
-    ParseState;
-parse_element(Chunk, ParseState) ->
-    B = ParseState#state.behaviour,
-    try parse_term(Chunk, ParseState#state.decoder) of
-        {{open_tag, Tag, Attributes}, Tail} ->
+parse_element(<<>>, ParserState) ->
+    ParserState;
+parse_element(Chunk, ParserState) ->
+    B = ParserState#state.behaviour,
+    try parse_term(Chunk, ParserState#state.location,
+            ParserState#state.decoder) of
+        {{open_tag, Tag, Attributes}, Tail, Location} ->
             {ok, State} = B:start_element(Tag, Attributes,
-                ParseState#state.state),
-            Stack = ParseState#state.stack,
-            parse_element(Tail, ParseState#state{state=State,
-                stack=[Tag | Stack]});
-        {{open_close_tag, Tag, Attributes}, Tail} ->
+                ParserState#state.location, ParserState#state.state),
+            Stack = ParserState#state.stack,
+            parse_element(Tail, ParserState#state{state=State,
+                stack=[Tag | Stack], location=Location});
+        {{open_close_tag, Tag, Attributes}, Tail, Location} ->
             {ok, State} = B:start_element(Tag, Attributes,
-                ParseState#state.state),
-            {ok, State2} = B:end_element(Tag, State),
-            parse_element(Tail, ParseState#state{state=State2});
-        {{close_tag, Tag}, Tail} ->
-            {ok, State} = B:end_element(Tag, ParseState#state.state),
-            case ParseState#state.stack of
+                ParserState#state.location, ParserState#state.state),
+            {ok, State2} = B:end_element(
+                Tag, ParserState#state.location, State),
+            parse_element(Tail, ParserState#state{state=State2,
+                location=Location});
+        {{close_tag, Tag}, Tail, Location} ->
+            {ok, State} = B:end_element(
+                Tag, ParserState#state.location, ParserState#state.state),
+            case ParserState#state.stack of
                 [Tag | Stack] ->
-                    parse_element(Tail, ParseState#state{state=State,
-                        stack=Stack});
+                    parse_element(Tail, ParserState#state{state=State,
+                        stack=Stack, location=Location});
                 _ ->
-                    erlang:error(xml_badtag)
+                    erlang:error({badtag, Location})
             end;
-        {{characters, Data}, Tail} ->
-            {ok, State} = B:characters(Data, ParseState#state.state),
-            parse_element(Tail, ParseState#state{state=State});
-        {_, Tail} ->
+        {{characters, Data}, Tail, Location} ->
+            {ok, State} = B:characters(
+                Data, ParserState#state.location, ParserState#state.state),
+            parse_element(Tail, ParserState#state{state=State,
+                location=Location});
+        {_, Tail, Location} ->
             % Skip other elements
-            parse_element(Tail, ParseState)
+            parse_element(Tail, ParserState#state{location=Location})
     catch
         throw:bad_name ->
-            erlang:error(xml_badtag);
+            erlang:error({badtag, ParserState#state.location});
         throw:need_more_data ->
-            ParseState#state{tail=Chunk}
+            ParserState#state{tail=Chunk}
     end.
 
 
 %%
 %% @doc Parse single XML term
 %% @throws need_more_data
-%% @spec parse_term(Chunk, Decoder) -> Result
+%% @spec parse_term(Chunk, Location, Decoder) -> Result
 %%      Chunk = binary()
+%%      Location = record()
+%%      Source = string()
+%%      Line = integer()
+%%      Col = integer()
 %%      Decoder = function()
 %%      Result = {TermInfo, Tail}
 %%      Tail = binary()
@@ -219,197 +239,261 @@ parse_element(Chunk, ParseState) ->
 %%      Value = string()
 %%      Data = string()
 %%
-parse_term(<<"<!--", Tail/binary>>, _) ->
-    {comment, skip_over(Tail, <<"-->">>)};
-parse_term(<<"<?", Tail/binary>>, _) ->
-    {processing_instruction, skip_over(Tail, <<"?>">>)};
-parse_term(<<"<![CDATA[", Chunk/binary>>, Decoder) ->
-    {Data, Tail} = parse_cdata(Chunk, Decoder, <<>>),
-    {{characters, Data}, Tail};
-parse_term(<<"</", Tail/binary>>, Decoder) ->
-    {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
-    case skip_whitespace(Tail2) of
-        <<">", Tail3/binary>> ->
-            {{close_tag, Tag}, Tail3};
-        <<>> ->
+parse_term(<<"<!--", Tail/binary>>, Location, _) ->
+    {NewTail, NewLocation} = skip_over(Tail, <<"-->">>, ?inc_col(Location, 4)),
+    {comment, NewTail, NewLocation};
+parse_term(<<"<?", Tail/binary>>, Location, _) ->
+    {NewTail, NewLocation} = skip_over(Tail, <<"?>">>, ?inc_col(Location, 2)),
+    {processing_instruction, NewTail, NewLocation};
+parse_term(<<"<![CDATA[", Chunk/binary>>, Location, Decoder) ->
+    {Data, Tail, NewLocation} = parse_cdata(Chunk, ?inc_col(Location, 9),
+        Decoder, <<>>),
+    {{characters, Data}, Tail, NewLocation};
+parse_term(<<"</", Tail/binary>>, Location, Decoder) ->
+    {Tag, Tail2, Location2} = parse_name(Tail, ?inc_col(Location, 2),
+        Decoder, <<>>),
+    case skip_whitespace(Tail2, Location2) of
+        {<<">", Tail3/binary>>, Location3} ->
+            {{close_tag, Tag}, Tail3, ?inc_col(Location3, 1)};
+        {<<>>, _Location3} ->
             throw(need_more_data);
-        _ ->
-            erlang:error(xml_badtag)
+        {_, Location3} ->
+            erlang:error({badtag, Location3})
     end;
-parse_term(<<"<", Tail/binary>>, Decoder) ->
-    {Tag, Tail2} = parse_name(Tail, Decoder, <<>>),
-    {Attributes, Tail3} = parse_attributes(Tail2, Decoder, []),
-    case skip_whitespace(Tail3) of
-        <<"/>", Tail4/binary>> ->
-            {{open_close_tag, Tag, Attributes}, Tail4};
-        <<">", Tail4/binary>> ->
-            {{open_tag, Tag, Attributes}, Tail4};
-        _ ->
-            erlang:error(xml_badattr)
+parse_term(<<"<", Tail/binary>>, Location, Decoder) ->
+    {Tag, Tail2, Location2} = parse_name(Tail, ?inc_col(Location, 1),
+        Decoder, <<>>),
+    {Attributes, Tail3, Location3} = parse_attributes(
+        Tail2, Location2, Decoder, []),
+    case skip_whitespace(Tail3, Location3) of
+        {<<"/>", Tail4/binary>>, Location4} ->
+            {{open_close_tag, Tag, Attributes}, Tail4, ?inc_col(Location4, 2)};
+        {<<">", Tail4/binary>>, Location4} ->
+            {{open_tag, Tag, Attributes}, Tail4, ?inc_col(Location4, 1)};
+        {_, Location4} ->
+            erlang:error({badattr, Location4})
     end;
-parse_term(Chunk, Decoder) ->
-    {Data, Tail} = parse_data(Chunk, Decoder, <<>>),
-    {{characters, Data}, Tail}.
+parse_term(Chunk, Location, Decoder) ->
+    {Data, Tail, NewLocation} = parse_data(Chunk, Location, Decoder, <<>>),
+    {{characters, Data}, Tail, NewLocation}.
 
 
 %%
 %% @doc Parse character data
-%% @spec parse_data(Chunk, Decoder, Acc) -> {Data, Tail}
+%% @spec parse_data(Chunk, Location, Decoder, Acc) -> Result
 %%      Chunk = binary()
+%%      Location = record()
 %%      Decoder = function()
 %%      Acc = binary()
+%%      Result = {Data, Tail, NewLocation}
 %%      Data = string()
 %%      Tail = binary()
+%%      NewLocation = tuple()
 %%
-parse_data(<<>>, Decoder, Data) ->
+parse_data(<<>>, Location, Decoder, Data) ->
     % Don't try to return all possible data at once
-    {Decoder(Data), <<>>};
-parse_data(<<"<", _/binary>>=Tail, Decoder, Data) ->
-    {Decoder(Data), Tail};
-parse_data(<<C, Tail/binary>>, Decoder, Data) ->
-    parse_data(Tail, Decoder, <<Data/binary, C>>).
+    {Decoder(Data), <<>>, Location};
+parse_data(<<"<", _/binary>>=Tail, Location, Decoder, Data) ->
+    {Decoder(Data), Tail, Location};
+parse_data(<<"\r\n", Tail/binary>>, Location, Decoder, Data) ->
+    parse_data(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r\n">>);
+parse_data(<<"\n", Tail/binary>>, Location, Decoder, Data) ->
+    parse_data(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\n">>);
+parse_data(<<"\r", Tail/binary>>, Location, Decoder, Data) ->
+    parse_data(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r">>);
+parse_data(<<C, Tail/binary>>, Location, Decoder, Data) ->
+    parse_data(Tail, ?inc_col(Location, 1), Decoder, <<Data/binary, C>>).
 
 
 %%
 %% @doc Parse CDATA characters
-%% @spec parse_cdata(Chunk, Decoder, Acc) -> {Data, Tail}
+%% @spec parse_cdata(Chunk, Location, Decoder, Acc) -> Result
 %%      Chunk = binary()
+%%      Location = record()
 %%      Decoder = function()
 %%      Acc = binary()
+%%      Result = {Data, Tail, NewLocation}
 %%      Data = string()
 %%      Tail = binary()
+%%      NewLocation = tuple()
 %%
-parse_cdata(<<>>, Decoder, Data) ->
+parse_cdata(<<>>, Location, Decoder, Data) ->
     % Don't try to return all possible data at once
-    {Decoder(Data), <<>>};
-parse_cdata(<<"]]>", Tail/binary>>, Decoder, Data) ->
-    {Decoder(Data), Tail};
-parse_cdata(<<C, Tail/binary>>, Decoder, Data) ->
-    parse_cdata(Tail, Decoder, <<Data/binary, C>>).
+    {Decoder(Data), <<>>, Location};
+parse_cdata(<<"]]>", Tail/binary>>, Location, Decoder, Data) ->
+    {Decoder(Data), Tail, ?inc_col(Location, 3)};
+parse_cdata(<<"\r\n", Tail/binary>>, Location, Decoder, Data) ->
+    parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r\n">>);
+parse_cdata(<<"\n", Tail/binary>>, Location, Decoder, Data) ->
+    parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\n">>);
+parse_cdata(<<"\r", Tail/binary>>, Location, Decoder, Data) ->
+    parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r">>);
+parse_cdata(<<C, Tail/binary>>, Location, Decoder, Data) ->
+    parse_cdata(Tail, ?inc_col(Location, 1), Decoder, <<Data/binary, C>>).
 
 
 %%
 %% @doc Skip at the end of the pattern
 %% @throws need_more_data
-%% @spec skip_over(Chunk, EndPattern) -> Tail
+%% @spec skip_over(Chunk, EndPattern, Location) -> Result
 %%      Chunk = binary()
 %%      EndPattern = binary()
+%%      Location = record()
+%%      Result = {Tail, NewLocation}
 %%      Tail = binary()
+%%      NewLocation = tuple()
 %%
-skip_over(Chunk, EndPattern) ->
-    skip_over(Chunk, EndPattern, size(EndPattern)).
+skip_over(Chunk, EndPattern, Location) ->
+    skip_over(Chunk, EndPattern, size(EndPattern), Location).
 
-skip_over(<<>>, _, _) ->
+skip_over(<<>>, _EndPattern, _Size, _Location) ->
     throw(need_more_data);
-skip_over(Chunk, EndPattern, Size) ->
+skip_over(Chunk, EndPattern, Size, Location) ->
     case Chunk of
         <<EndPattern:Size/binary, Tail/binary>> ->
-            Tail;
+            {Tail, ?inc_col(Location, Size)};
+        <<"\r\n", Tail/binary>> ->
+            skip_over(Tail, EndPattern, Size, ?inc_line(Location));
+        <<"\n", Tail/binary>> ->
+            skip_over(Tail, EndPattern, Size, ?inc_line(Location));
+        <<"\r", Tail/binary>> ->
+            skip_over(Tail, EndPattern, Size, ?inc_line(Location));
         <<_, Tail/binary>> ->
-            skip_over(Tail, EndPattern, Size)
+            skip_over(Tail, EndPattern, Size, ?inc_col(Location, 1))
     end.
 
 
 %%
 %% @doc Skip whitespace characters
-%% @spec skip_whitespace(Chunk) -> Tail
+%% @spec skip_whitespace(Chunk, Location) -> Result
 %%      Chunk = binary()
+%%      Result = {Tail, NewLocation}
 %%      Tail = binary()
+%%      NewLocation = record()
 %%
-skip_whitespace(<<C, Tail/binary>>) when ?is_whitespace(C) ->
-    skip_whitespace(Tail);
-skip_whitespace(Tail) ->
-    Tail.
+skip_whitespace(<<"\r\n", Tail/binary>>, Location) ->
+    skip_whitespace(Tail, ?inc_line(Location));
+skip_whitespace(<<"\n", Tail/binary>>, Location) ->
+    skip_whitespace(Tail, ?inc_line(Location));
+skip_whitespace(<<"\r", Tail/binary>>, Location) ->
+    skip_whitespace(Tail, ?inc_line(Location));
+skip_whitespace(<<" ", Tail/binary>>, Location) ->
+    skip_whitespace(Tail, ?inc_col(Location, 1));
+skip_whitespace(<<"\t", Tail/binary>>, Location) ->
+    skip_whitespace(Tail, ?inc_col(Location, 1));
+skip_whitespace(Tail, Location) ->
+    {Tail, Location}.
 
 
 %%
 %% @doc Parse tag and attribute names
 %% @throws bad_name | need_more_data
-%% @spec parse_name(Chunk, Decoder, Acc) -> {Tag, Tail}
+%% @spec parse_name(Chunk, Location, Decoder, Acc) -> Result
 %%      Chunk = binary()
+%%      Location = record()
 %%      Decoder = function()
 %%      Acc = binary()
+%%      Result = {Tag, Tail, NewLocation}
 %%      Tag = string()
 %%      Tail = binary()
+%%      NewLocation = record()
 %%
-parse_name(<<>>, _, _) ->
+parse_name(<<>>, _Location, _Decoder, _Acc) ->
     throw(need_more_data);
-parse_name(<<C, Tail/binary>>, Decoder, <<>>) when ?is_namestartchar(C) ->
-    parse_name(Tail, Decoder, <<C>>);
-parse_name(_, _, <<>>) ->
+parse_name(<<C, Tail/binary>>, Location, Decoder, <<>>)
+        when ?is_namestartchar(C) ->
+    parse_name(Tail, ?inc_col(Location, 1), Decoder, <<C>>);
+parse_name(_Chunk, _Location, _Decoder, <<>>) ->
     throw(bad_name);
-parse_name(<<C, Tail/binary>>, Decoder, Name) when ?is_namechar(C) ->
-    parse_name(Tail, Decoder, <<Name/binary, C>>);
-parse_name(Tail, Decoder, Name) ->
-    {Decoder(Name), Tail}.
+parse_name(<<C, Tail/binary>>, Location, Decoder, Name) when ?is_namechar(C) ->
+    parse_name(Tail, ?inc_col(Location, 1), Decoder, <<Name/binary, C>>);
+parse_name(Tail, Location, Decoder, Name) ->
+    {Decoder(Name), Tail, Location}.
 
 
 %%
 %% @doc Parse tag attributes
 %% @throws need_more_data
-%% @spec parse_attributes(Chunk, Decoder, Acc) -> {Attributes, Tail}
+%% @spec parse_attributes(Chunk, Location, Decoder, Acc) -> Result
 %%      Chunk = binary()
+%%      Location = record()
 %%      Decoder = function()
 %%      Acc = list()
+%%      Result = {Attributes, Tail, NewLocation}
 %%      Attributes = [{Key, Value}]
 %%      Key = string()
 %%      Value = string()
 %%      Tail = binary()
+%%      NewLocation = record()
 %%
-parse_attributes(Chunk, Decoder, Attributes) ->
-    case skip_whitespace(Chunk) of
-        <<>> ->
+parse_attributes(Chunk, Location, Decoder, Attributes) ->
+    case skip_whitespace(Chunk, Location) of
+        {<<>>, _Location2} ->
             throw(need_more_data);
-        Chunk ->
-            {lists:reverse(Attributes), Chunk};
-        Tail ->
-            try parse_name(Tail, Decoder, <<>>) of
-                {Name, Tail2} ->
-                    Tail3 = parse_eq(Tail2),
-                    {Value, Tail4} = parse_value(Tail3, Decoder, <<>>, none),
-                    parse_attributes(Tail4, Decoder,
+        {Chunk, Location2} ->
+            {lists:reverse(Attributes), Chunk, Location2};
+        {Tail, Location2} ->
+            try parse_name(Tail, Location2, Decoder, <<>>) of
+                {Name, Tail2, Location3} ->
+                    {Tail3, Location4} = parse_eq(Tail2, Location3),
+                    {Value, Tail4, Location5} = parse_value(
+                        Tail3, Location4, Decoder, <<>>, none),
+                    parse_attributes(Tail4, Location5, Decoder,
                         [{Name, Value} | Attributes])
             catch
                 throw:bad_name ->
-                    {lists:reverse(Attributes), Tail}
+                    {lists:reverse(Attributes), Tail, Location2}
             end
     end.
 
 
 %%
 %% @doc Parse equality sign
-%% @spec parse_eq(Chunk) -> Tail
+%% @spec parse_eq(Chunk, Location) -> Result
 %%      Chunk = binary()
+%%      Locaiton = record()
+%%      Result = {Tail, NewLocation}
 %%      Tail = binary()
+%%      NewLocation = record()
 %%
-parse_eq(Chunk) ->
-    case skip_whitespace(Chunk) of
-        <<"=", Tail/binary>> ->
-            skip_whitespace(Tail);
+parse_eq(Chunk, Location) ->
+    case skip_whitespace(Chunk, Location) of
+        {<<"=", Tail/binary>>, Location2} ->
+            skip_whitespace(Tail, ?inc_col(Location2, 1));
         _ ->
-            erlang:error(xml_badattr)
+            erlang:error({badattr, Location})
     end.
 
 
 %%
 %% @doc Parse attribute value
 %% @throws need_more_data
-%% @spec parse_value(Chunk, Decoder, Acc, Quote) -> {Value, Tail}
+%% @spec parse_value(Chunk, Location, Decoder, Acc, Quote) -> Result
 %%      Chunk = binary()
+%%      Location = record()
 %%      Decoder = function()
 %%      Acc = binary()
 %%      Quote = none | 34 | 39
+%%      Result = {Value, Tail, NewLocation}
 %%      Value = string()
 %%      Tail = binary()
+%%      NewLocation = record()
 %%
-parse_value(<<>>, _, _, _) ->
+parse_value(<<>>, _Location, _Decoder, _Acc, _Quote) ->
     throw(need_more_data);
-parse_value(<<C, Tail/binary>>, Decoder, <<>>, none) when ?is_quote(C) ->
-    parse_value(Tail, Decoder, <<>>, C);
-parse_value(<<Q, Tail/binary>>, Decoder, Value, Q) ->
-    {Decoder(Value), Tail};
-parse_value(<<C, Tail/binary>>, Decoder, Value, Q)
+parse_value(<<C, Tail/binary>>, Location, Decoder, <<>>, none)
+        when ?is_quote(C) ->
+    parse_value(Tail, ?inc_col(Location, 1), Decoder, <<>>, C);
+parse_value(<<Q, Tail/binary>>, Location, Decoder, Value, Q) ->
+    {Decoder(Value), Tail, ?inc_col(Location, 1)};
+parse_value(<<"\r\n", Tail/binary>>, Location, Decoder, Value, Q) ->
+    parse_value(Tail, ?inc_line(Location), Decoder, Value, Q);
+parse_value(<<"\n", Tail/binary>>, Location, Decoder, Value, Q) ->
+    parse_value(Tail, ?inc_line(Location), Decoder, Value, Q);
+parse_value(<<"\r", Tail/binary>>, Location, Decoder, Value, Q) ->
+    parse_value(Tail, ?inc_line(Location), Decoder, Value, Q);
+parse_value(<<C, Tail/binary>>, Location, Decoder, Value, Q)
         when ?is_attrvaluechar(C, Q) ->
-    parse_value(Tail, Decoder, <<Value/binary, C>>, Q);
-parse_value(_, _, _, _) ->
-    erlang:error(xml_badattr).
+    parse_value(Tail, ?inc_col(Location, 1), Decoder, <<Value/binary, C>>, Q);
+parse_value(_Chunk, Location, _Decoder, _Acc, _Quote) ->
+    erlang:error({badattr, Location}).

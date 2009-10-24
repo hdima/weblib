@@ -25,11 +25,10 @@ XML parser
 
     and: {endElement, Uri, LocalName, QualifiedName}
 
-- Return line and column numbers with all errors
+  Need to unificate XML callback module interface and possible future HTML
+  callback module interface
 
-- Pass location info to callback methods
-
-- Add independent callback interface (or just function) to request decoder
+- Add independent callback interface (or just function) to request decoder?
 
 
 FeedParser
