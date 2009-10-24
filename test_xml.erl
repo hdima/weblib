@@ -4,13 +4,13 @@
 
 -behaviour(simplexml).
 
--export([start_document/1, end_document/1, start_element/3, end_element/2,
-    characters/2]).
+-export([start_document/2, end_document/2, start_element/4, end_element/3,
+    characters/3]).
 
 
 parse_file(Filename) ->
     {ok, File} = file:open(Filename, [read, raw, binary]),
-    {continue, ParseState} = simplexml:parse(<<>>, ?MODULE, none),
+    {continue, ParseState} = simplexml:parse(<<>>, Filename, ?MODULE, none),
     read_file(File, ParseState).
 
 
@@ -29,25 +29,25 @@ read_file(File, ParseState) ->
     end.
 
 
-start_document(Args) ->
-    io:format("start document~n"),
+start_document(Location, Args) ->
+    io:format("start document (~p)~n", [Location]),
     {ok, Args}.
 
 
-end_document(State) ->
-    io:format("end document~n"),
+end_document(Location, State) ->
+    io:format("end document (~p)~n", [Location]),
     {ok, State}.
 
-start_element(Tag, Attributes, State) ->
-    io:format("start element: ~p ~p~n", [Tag, Attributes]),
-    {ok, State}.
-
-
-end_element(Tag, State) ->
-    io:format("end element: ~p~n", [Tag]),
+start_element(Tag, Attributes, Location, State) ->
+    io:format("start element (~p): ~p ~p~n", [Location, Tag, Attributes]),
     {ok, State}.
 
 
-characters(Chunk, State) ->
-    io:format("characters: ~p~n", [Chunk]),
+end_element(Tag, Location, State) ->
+    io:format("end element (~p): ~p~n", [Location, Tag]),
+    {ok, State}.
+
+
+characters(Chunk, Location, State) ->
+    io:format("characters (~p): ~p~n", [Location, Chunk]),
     {ok, State}.
