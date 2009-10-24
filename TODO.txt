@@ -28,6 +28,8 @@ XML parser
   Need to unificate XML callback module interface and possible future HTML
   callback module interface
 
+- Add callback for ignorable whitespace?
+
 - Add independent callback interface (or just function) to request decoder?
 
 
