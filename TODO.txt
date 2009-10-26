@@ -13,8 +13,6 @@ XML parser
 
 - Allow start_element callback say to parse tag content as characters?
 
-- Parse entity references
-
 - Parse XML namespaces.
   
   Maybe tag callback should pass the following information?
@@ -29,6 +27,8 @@ XML parser
   callback module interface
 
 - Add callback for ignorable whitespace?
+
+- Parse entity declarations?
 
 - Add independent callback interface (or just function) to request decoder?
 

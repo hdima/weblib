@@ -274,35 +274,165 @@ parse_term(<<"<", Tail/binary>>, Location, Decoder) ->
             erlang:error({badattr, Location4})
     end;
 parse_term(Chunk, Location, Decoder) ->
-    {Data, Tail, NewLocation} = parse_data(Chunk, Location, Decoder, <<>>),
+    {Data, Tail, NewLocation} = parse_data(Chunk, Location, Decoder, []),
     {{characters, Data}, Tail, NewLocation}.
 
 
 %%
 %% @doc Parse character data
-%% @spec parse_data(Chunk, Location, Decoder, Acc) -> Result
+%% @spec parse_data(Chunk, Location, Decoder, Parts) -> Result
 %%      Chunk = binary()
 %%      Location = record()
 %%      Decoder = function()
+%%      Parts = list()
+%%      Result = {String, Tail, NewLocation}
+%%      String = string()
+%%      Tail = binary()
+%%      NewLocation = record()
+%%
+parse_data(<<>>, Location, _Decoder, Parts) ->
+    {lists:flatten(lists:reverse(Parts)), <<>>, Location};
+parse_data(<<"<", _/binary>>=Tail, Location, _Decoder, Parts) ->
+    {lists:flatten(lists:reverse(Parts)), Tail, Location};
+parse_data(<<"&", Ref/binary>>, Location, Decoder, Parts) ->
+    {String, Tail, NewLocation} = parse_reference(Ref, ?inc_col(Location, 1)),
+    parse_data(Tail, NewLocation, Decoder, [String | Parts]);
+parse_data(Data, Location, Decoder, Parts) ->
+    {Binary, Tail, NewLocation} = parse_binary_data(Data, Location, <<>>),
+    parse_data(Tail, NewLocation, Decoder, [Decoder(Binary) | Parts]).
+
+
+%%
+%% @doc Parse reference
+%% @spec parse_reference(Chunk, Location) -> Result
+%%      Chunk = binary()
+%%      Location = record()
+%%      Result = {Reference, Tail, NewLocation}
+%%      Reference = list()
+%%      Tail = binary()
+%%      NewLocation = record()
+parse_reference(<<"#x", HexNumber/binary>>, Location) ->
+    parse_hex(HexNumber, ?inc_col(Location, 2), 0);
+parse_reference(<<"#", Number/binary>>, Location) ->
+    parse_decimal(Number, ?inc_col(Location, 1), 0);
+parse_reference(Data, Location) ->
+    parse_entity_ref(Data, Location, <<>>).
+
+
+%%
+%% @doc Parse entity reference
+%% @throw need_more_data
+%% @spec parse_entity_ref(Chunk, Location, Acc) -> Result
+%%      Chunk = binary()
+%%      Location = record()
+%%      Acc = binary()
+%%      Result = {String, Tail, NewLocation}
+%%      String = string()
+%%      Tail = binary()
+%%      NewLocation = record()
+%%
+parse_entity_ref(<<>>, _Location, _Acc) ->
+    throw(need_more_data);
+parse_entity_ref(<<";", Tail/binary>>, Location, <<"lt">>) ->
+    {"<", Tail, ?inc_col(Location, 1)};
+parse_entity_ref(<<";", Tail/binary>>, Location, <<"gt">>) ->
+    {">", Tail, ?inc_col(Location, 1)};
+parse_entity_ref(<<";", Tail/binary>>, Location, <<"amp">>) ->
+    {"&", Tail, ?inc_col(Location, 1)};
+parse_entity_ref(<<";", Tail/binary>>, Location, <<"apos">>) ->
+    {"'", Tail, ?inc_col(Location, 1)};
+parse_entity_ref(<<";", Tail/binary>>, Location, <<"quot">>) ->
+    {"\"", Tail, ?inc_col(Location, 1)};
+parse_entity_ref(<<";", _/binary>>, Location, _Acc) ->
+    erlang:error({badref, Location});
+parse_entity_ref(<<C, Tail/binary>>, Location, <<>>)
+        when ?is_namestartchar(C) ->
+    parse_entity_ref(Tail, ?inc_col(Location, 1), <<C>>);
+parse_entity_ref(<<_C, _Tail/binary>>, Location, <<>>) ->
+    erlang:error({badref, Location});
+parse_entity_ref(<<C, Tail/binary>>, Location, Acc) when ?is_namechar(C) ->
+    parse_entity_ref(Tail, ?inc_col(Location, 1), <<Acc/binary, C>>);
+parse_entity_ref(_Data, Location, _Acc) ->
+    erlang:error({badref, Location}).
+
+
+%%
+%% @doc Parse decimal number
+%% @throws need_more_data
+%% @spec parse_decimal(Chunk, Location, Acc) -> Result
+%%      Chunk = binary()
+%%      Location = record()
+%%      Acc = integer()
+%%      Result = {String, Tail, NewLocation}
+%%      String = string()
+%%      Tail = binary()
+%%      NewLocation = record()
+%%
+parse_decimal(<<>>, _Location, _Acc) ->
+    throw(need_more_data);
+parse_decimal(<<";", _Tail/binary>>, Location, 0) ->
+    erlang:error({badref, Location});
+parse_decimal(<<";", Tail/binary>>, Location, Acc) ->
+    {[Acc], Tail, ?inc_col(Location, 1)};
+parse_decimal(<<C, Tail/binary>>, Location, Acc) when C >= $0, C =< $9 ->
+    parse_decimal(Tail, ?inc_col(Location, 1), Acc * 10 + C - $0);
+parse_decimal(_Tail, Location, _Acc) ->
+    erlang:error({badref, Location}).
+
+
+%%
+%% @doc Parse hexadecimal number
+%% @throws need_more_data
+%% @spec parse_hex(Chunk, Location, Acc) -> Result
+%%      Chunk = binary()
+%%      Location = record()
+%%      Acc = integer()
+%%      Result = {String, Tail, NewLocation}
+%%      String = string()
+%%      Tail = binary()
+%%      NewLocation = record()
+%%
+parse_hex(<<>>, _Location, _Acc) ->
+    throw(need_more_data);
+parse_hex(<<";", _Tail/binary>>, Location, 0) ->
+    erlang:error({badref, Location});
+parse_hex(<<";", Tail/binary>>, Location, Acc) ->
+    {[Acc], Tail, ?inc_col(Location, 1)};
+parse_hex(<<C, Tail/binary>>, Location, Acc) when C >= $0, C =< $9 ->
+    parse_hex(Tail, ?inc_col(Location, 1), Acc * 16 + C - $0);
+parse_hex(<<C, Tail/binary>>, Location, Acc) when C >= $a, C =< $f ->
+    parse_hex(Tail, ?inc_col(Location, 1), Acc * 16 + C - $a + 10);
+parse_hex(<<C, Tail/binary>>, Location, Acc) when C >= $a, C =< $F ->
+    parse_hex(Tail, ?inc_col(Location, 1), Acc * 16 + C - $A + 10);
+parse_hex(_Tail, Location, _Acc) ->
+    erlang:error({badref, Location}).
+
+
+%%
+%% @doc Parse binary data
+%% @spec parse_binary_data(Chunk, Location, Acc) -> Result
+%%      Chunk = binary()
+%%      Location = record()
 %%      Acc = binary()
 %%      Result = {Data, Tail, NewLocation}
-%%      Data = string()
+%%      Data = binary()
 %%      Tail = binary()
-%%      NewLocation = tuple()
+%%      NewLocation = record()
 %%
-parse_data(<<>>, Location, Decoder, Data) ->
-    % Don't try to return all possible data at once
-    {Decoder(Data), <<>>, Location};
-parse_data(<<"<", _/binary>>=Tail, Location, Decoder, Data) ->
-    {Decoder(Data), Tail, Location};
-parse_data(<<"\r\n", Tail/binary>>, Location, Decoder, Data) ->
-    parse_data(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r\n">>);
-parse_data(<<"\n", Tail/binary>>, Location, Decoder, Data) ->
-    parse_data(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\n">>);
-parse_data(<<"\r", Tail/binary>>, Location, Decoder, Data) ->
-    parse_data(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r">>);
-parse_data(<<C, Tail/binary>>, Location, Decoder, Data) ->
-    parse_data(Tail, ?inc_col(Location, 1), Decoder, <<Data/binary, C>>).
+parse_binary_data(<<>>, Location, Data) ->
+    {Data, <<>>, Location};
+parse_binary_data(<<"<", _/binary>>=Tail, Location, Data) ->
+    {Data, Tail, Location};
+parse_binary_data(<<"&", _/binary>>=Tail, Location, Data) ->
+    {Data, Tail, Location};
+parse_binary_data(<<"\r\n", Tail/binary>>, Location, Data) ->
+    parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\r\n">>);
+parse_binary_data(<<"\n", Tail/binary>>, Location, Data) ->
+    parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\n">>);
+parse_binary_data(<<"\r", Tail/binary>>, Location, Data) ->
+    parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\r">>);
+parse_binary_data(<<C, Tail/binary>>, Location, Data) ->
+    parse_binary_data(Tail, ?inc_col(Location, 1), <<Data/binary, C>>).
 
 
 %%
@@ -315,7 +445,7 @@ parse_data(<<C, Tail/binary>>, Location, Decoder, Data) ->
 %%      Result = {Data, Tail, NewLocation}
 %%      Data = string()
 %%      Tail = binary()
-%%      NewLocation = tuple()
+%%      NewLocation = record()
 %%
 parse_cdata(<<>>, Location, Decoder, Data) ->
     % Don't try to return all possible data at once
@@ -341,7 +471,7 @@ parse_cdata(<<C, Tail/binary>>, Location, Decoder, Data) ->
 %%      Location = record()
 %%      Result = {Tail, NewLocation}
 %%      Tail = binary()
-%%      NewLocation = tuple()
+%%      NewLocation = record()
 %%
 skip_over(Chunk, EndPattern, Location) ->
     skip_over(Chunk, EndPattern, size(EndPattern), Location).
@@ -436,8 +566,8 @@ parse_attributes(Chunk, Location, Decoder, Attributes) ->
             try parse_name(Tail, Location2, Decoder, <<>>) of
                 {Name, Tail2, Location3} ->
                     {Tail3, Location4} = parse_eq(Tail2, Location3),
-                    {Value, Tail4, Location5} = parse_value(
-                        Tail3, Location4, Decoder, <<>>, none),
+                    {Value, Tail4, Location5} = parse_attr_value(
+                        Tail3, Location4, Decoder, [], none),
                     parse_attributes(Tail4, Location5, Decoder,
                         [{Name, Value} | Attributes])
             catch
@@ -468,32 +598,57 @@ parse_eq(Chunk, Location) ->
 %%
 %% @doc Parse attribute value
 %% @throws need_more_data
-%% @spec parse_value(Chunk, Location, Decoder, Acc, Quote) -> Result
+%% @spec parse_attr_value(Chunk, Location, Decoder, Acc, Quote) -> Result
 %%      Chunk = binary()
 %%      Location = record()
 %%      Decoder = function()
-%%      Acc = binary()
+%%      Acc = list()
 %%      Quote = none | 34 | 39
 %%      Result = {Value, Tail, NewLocation}
 %%      Value = string()
 %%      Tail = binary()
 %%      NewLocation = record()
 %%
-parse_value(<<>>, _Location, _Decoder, _Acc, _Quote) ->
+parse_attr_value(<<>>, _Location, _Decoder, _Acc, _Quote) ->
     throw(need_more_data);
-parse_value(<<C, Tail/binary>>, Location, Decoder, <<>>, none)
+parse_attr_value(<<C, Tail/binary>>, Location, Decoder, [], none)
         when ?is_quote(C) ->
-    parse_value(Tail, ?inc_col(Location, 1), Decoder, <<>>, C);
-parse_value(<<Q, Tail/binary>>, Location, Decoder, Value, Q) ->
-    {Decoder(Value), Tail, ?inc_col(Location, 1)};
-parse_value(<<"\r\n", Tail/binary>>, Location, Decoder, Value, Q) ->
-    parse_value(Tail, ?inc_line(Location), Decoder, Value, Q);
-parse_value(<<"\n", Tail/binary>>, Location, Decoder, Value, Q) ->
-    parse_value(Tail, ?inc_line(Location), Decoder, Value, Q);
-parse_value(<<"\r", Tail/binary>>, Location, Decoder, Value, Q) ->
-    parse_value(Tail, ?inc_line(Location), Decoder, Value, Q);
-parse_value(<<C, Tail/binary>>, Location, Decoder, Value, Q)
+    parse_attr_value(Tail, ?inc_col(Location, 1), Decoder, [], C);
+parse_attr_value(<<Q, Tail/binary>>, Location, _Decoder, Parts, Q) ->
+    {lists:flatten(lists:reverse(Parts)), Tail, ?inc_col(Location, 1)};
+parse_attr_value(<<"&", Ref/binary>>, Location, Decoder, Parts, Q) ->
+    {String, Tail, NewLocation} = parse_reference(Ref, ?inc_col(Location, 1)),
+    parse_attr_value(Tail, NewLocation, Decoder, [String | Parts], Q);
+parse_attr_value(Data, Location, Decoder, Parts, Q) ->
+    {Binary, Tail, NewLocation} = parse_binary_value(Data, Location, <<>>, Q),
+    parse_attr_value(Tail, NewLocation, Decoder, [Decoder(Binary) | Parts], Q).
+
+
+%%
+%% @doc Parse binary value
+%% @throws need_more_data
+%% @spec parse_binary_value(Chunk, Location, Acc, Quote) -> Result
+%%      Chunk = binary()
+%%      Location = record()
+%%      Acc = binary()
+%%      Quote = 34 | 39
+%%      Result = {Value, Tail, NewLocation}
+%%      Value = binary()
+%%      Tail = binary()
+%%      NewLocation = record()
+%%
+parse_binary_value(<<>>, _Location, _Acc, _Quote) ->
+    throw(need_more_data);
+parse_binary_value(<<Q, _/binary>>=Tail, Location, Value, Q) ->
+    {Value, Tail, Location};
+parse_binary_value(<<"\r\n", Tail/binary>>, Location, Value, Q) ->
+    parse_binary_value(Tail, ?inc_line(Location), Value, Q);
+parse_binary_value(<<"\n", Tail/binary>>, Location, Value, Q) ->
+    parse_binary_value(Tail, ?inc_line(Location), Value, Q);
+parse_binary_value(<<"\r", Tail/binary>>, Location, Value, Q) ->
+    parse_binary_value(Tail, ?inc_line(Location), Value, Q);
+parse_binary_value(<<C, Tail/binary>>, Location, Value, Q)
         when ?is_attrvaluechar(C, Q) ->
-    parse_value(Tail, ?inc_col(Location, 1), Decoder, <<Value/binary, C>>, Q);
-parse_value(_Chunk, Location, _Decoder, _Acc, _Quote) ->
+    parse_binary_value(Tail, ?inc_col(Location, 1), <<Value/binary, C>>, Q);
+parse_binary_value(_Chunk, Location, _Acc, _Quote) ->
     erlang:error({badattr, Location}).

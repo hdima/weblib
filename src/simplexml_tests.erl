@@ -158,7 +158,7 @@ constants_test_() -> [
     ].
 
 
-errors_test_() -> [
+xml_errors_test_() -> [
     ?_assertError({incomplete, #location{source="test", line=1, column=4}},
         get_chunked_trace([<<"<a>">>, eof])),
     ?_assertError({badtag, #location{source="test", line=1, column=1}},
@@ -301,7 +301,13 @@ cdata_test_() -> [
             {characters, "<tag>Data</tag>", _},
             {end_element, "tag", _},
             {end_document, _}],
-        get_trace(<<"<tag><![CDATA[<tag>Data</tag>]]></tag>">>))
+        get_trace(<<"<tag><![CDATA[<tag>Data</tag>]]></tag>">>)),
+    ?_assertMatch([{start_document, _},
+            {start_element, "tag", [], _},
+            {characters, "&#10;&#xf;&lt;", _},
+            {end_element, "tag", _},
+            {end_document, _}],
+        get_trace(<<"<tag><![CDATA[&#10;&#xf;&lt;]]></tag>">>))
     ].
 
 
@@ -329,4 +335,63 @@ location_test_() -> [
             {characters, "B \n ", #location{source="test", line=4, column=2}},
             {end_document, #location{source="test", line=5, column=5}}
             ], get_trace(<<"<!-- \n --> \n <?a?> \r\n <![CDATA[B \n ]]>">>))
+    ].
+
+
+reference_test_() -> [
+    ?_assertMatch([{start_document, _},
+            {start_element, "a", [], _},
+            {characters, [10, 10], _},
+            {end_element, "a", _},
+            {end_document, _}],
+        get_trace(<<"<a>&#10;&#xa;</a>">>)),
+    ?_assertMatch([{start_document, _},
+            {start_element, "a", [], _},
+            {characters, "<>&'\"", _},
+            {end_element, "a", _},
+            {end_document, _}],
+        get_trace(<<"<a>&lt;&gt;&amp;&apos;&quot;</a>">>)),
+    ?_assertMatch([{start_document, _},
+            {start_element, "a", [{"name", "<>&'\""}], _},
+            {end_element, "a", _},
+            {end_document, _}],
+        get_trace(<<"<a name='&lt;&gt;&amp;&apos;&quot;'/>">>))
+    ].
+
+
+reference_errors_test_() -> [
+    ?_assertError({badref, #location{source="test", line=1, column=6}},
+        get_trace(<<"<a>&#a;</a>">>)),
+    ?_assertError({badref, #location{source="test", line=1, column=7}},
+        get_trace(<<"<a>&#xg;</a>">>)),
+    ?_assertError({badref, #location{source="test", line=1, column=6}},
+        get_trace(<<"<a>&#;</a>">>)),
+    ?_assertError({badref, #location{source="test", line=1, column=7}},
+        get_trace(<<"<a>&#x;</a>">>)),
+    ?_assertError({badref, #location{source="test", line=1, column=6}},
+        get_trace(<<"<a>&#</a>">>)),
+    ?_assertError({badref, #location{source="test", line=1, column=7}},
+        get_trace(<<"<a>&#x</a>">>))
+    ].
+
+
+reference_continuation_test_() -> [
+    ?_assertMatch([{start_document, _},
+            {start_element, "a", [], _},
+            {characters, [100], _},
+            {end_element, "a", _},
+            {end_document, _}],
+        get_chunked_trace([<<"<a>&#1">>, <<"00;</a>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, "a", [], _},
+            {characters, [16#fff], _},
+            {end_element, "a", _},
+            {end_document, _}],
+        get_chunked_trace([<<"<a>&#xf">>, <<"ff;</a>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, "a", [], _},
+            {characters, "'", _},
+            {end_element, "a", _},
+            {end_document, _}],
+        get_chunked_trace([<<"<a>&ap">>, <<"os;</a>">>]))
     ].
