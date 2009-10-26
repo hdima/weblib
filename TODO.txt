@@ -28,6 +28,8 @@ XML parser
 
 - Add callback for ignorable whitespace?
 
+- Check character references for valid range?
+
 - Parse entity declarations?
 
 - Add independent callback interface (or just function) to request decoder?
