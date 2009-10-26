@@ -321,7 +321,7 @@ parse_reference(Data, Location) ->
 
 %%
 %% @doc Parse entity reference
-%% @throw need_more_data
+%% @throws need_more_data
 %% @spec parse_entity_ref(Chunk, Location, Acc) -> Result
 %%      Chunk = binary()
 %%      Location = record()
