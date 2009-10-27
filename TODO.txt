@@ -11,6 +11,8 @@ XML parser
 
 - Try to optimize references handling
 
+- Translate EOL to $\n
+
 - Add encoding handling and Unicode decoding
 
 - Disallow multiple root elements
