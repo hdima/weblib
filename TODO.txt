@@ -35,6 +35,8 @@ XML parser
 
 - Parse entity declarations?
 
+- Parse/ignore <!DOCTYPE
+
 - Add independent callback interface (or just function) to request decoder?
 
 
