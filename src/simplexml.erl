@@ -426,11 +426,11 @@ parse_binary_data(<<"<", _/binary>>=Tail, Location, Data) ->
 parse_binary_data(<<"&", _/binary>>=Tail, Location, Data) ->
     {Data, Tail, Location};
 parse_binary_data(<<"\r\n", Tail/binary>>, Location, Data) ->
-    parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\r\n">>);
+    parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\n">>);
 parse_binary_data(<<"\n", Tail/binary>>, Location, Data) ->
     parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\n">>);
 parse_binary_data(<<"\r", Tail/binary>>, Location, Data) ->
-    parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\r">>);
+    parse_binary_data(Tail, ?inc_line(Location), <<Data/binary, "\n">>);
 parse_binary_data(<<C, Tail/binary>>, Location, Data) ->
     parse_binary_data(Tail, ?inc_col(Location, 1), <<Data/binary, C>>).
 
@@ -453,11 +453,11 @@ parse_cdata(<<>>, Location, Decoder, Data) ->
 parse_cdata(<<"]]>", Tail/binary>>, Location, Decoder, Data) ->
     {Decoder(Data), Tail, ?inc_col(Location, 3)};
 parse_cdata(<<"\r\n", Tail/binary>>, Location, Decoder, Data) ->
-    parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r\n">>);
+    parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\n">>);
 parse_cdata(<<"\n", Tail/binary>>, Location, Decoder, Data) ->
     parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\n">>);
 parse_cdata(<<"\r", Tail/binary>>, Location, Decoder, Data) ->
-    parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\r">>);
+    parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\n">>);
 parse_cdata(<<C, Tail/binary>>, Location, Decoder, Data) ->
     parse_cdata(Tail, ?inc_col(Location, 1), Decoder, <<Data/binary, C>>).
 
@@ -642,11 +642,11 @@ parse_binary_value(<<>>, _Location, _Acc, _Quote) ->
 parse_binary_value(<<Q, _/binary>>=Tail, Location, Value, Q) ->
     {Value, Tail, Location};
 parse_binary_value(<<"\r\n", Tail/binary>>, Location, Value, Q) ->
-    parse_binary_value(Tail, ?inc_line(Location), Value, Q);
+    parse_binary_value(Tail, ?inc_line(Location), <<Value/binary, "\n">>, Q);
 parse_binary_value(<<"\n", Tail/binary>>, Location, Value, Q) ->
-    parse_binary_value(Tail, ?inc_line(Location), Value, Q);
+    parse_binary_value(Tail, ?inc_line(Location), <<Value/binary, "\n">>, Q);
 parse_binary_value(<<"\r", Tail/binary>>, Location, Value, Q) ->
-    parse_binary_value(Tail, ?inc_line(Location), Value, Q);
+    parse_binary_value(Tail, ?inc_line(Location), <<Value/binary, "\n">>, Q);
 parse_binary_value(<<C, Tail/binary>>, Location, Value, Q)
         when ?is_attrvaluechar(C, Q) ->
     parse_binary_value(Tail, ?inc_col(Location, 1), <<Value/binary, C>>, Q);

@@ -316,14 +316,14 @@ location_test_() -> [
             {start_document, #location{source="test", line=1, column=1}},
             {start_element, "a", [],
                 #location{source="test", line=1, column=1}},
-            {characters, " A \r\n ",
+            {characters, " A \n ",
                 #location{source="test", line=1, column=4}},
             {start_element, "b", [],
                 #location{source="test", line=2, column=2}},
             {characters, " B \n ",
                 #location{source="test", line=2, column=5}},
             {end_element, "b", #location{source="test", line=3, column=2}},
-            {characters, " \r ",
+            {characters, " \n ",
                 #location{source="test", line=3, column=6}},
             {end_element, "a", #location{source="test", line=4, column=2}},
             {end_document, #location{source="test", line=4, column=6}}
@@ -331,10 +331,10 @@ location_test_() -> [
         ?_assertEqual([
             {start_document, #location{source="test", line=1, column=1}},
             {characters, " \n ", #location{source="test", line=2, column=5}},
-            {characters, " \r\n ", #location{source="test", line=3, column=7}},
+            {characters, " \n ", #location{source="test", line=3, column=7}},
             {characters, "B \n ", #location{source="test", line=4, column=2}},
             {end_document, #location{source="test", line=5, column=5}}
-            ], get_trace(<<"<!-- \n --> \n <?a?> \r\n <![CDATA[B \n ]]>">>))
+            ], get_trace(<<"<!-- \n --> \n <?a?> \r\n <![CDATA[B \r ]]>">>))
     ].
 
 
