@@ -7,14 +7,7 @@ General
 XML parser
 ----------
 
-- Check character references for valid range?
-
-- Try to optimize references handling
-
 - Add encoding handling and Unicode decoding
-
-- Allow start_element callback say to parse tag content as characters? Need
-  to be careful with CDATA sub-elements.
 
 - Parse XML namespaces.
   
@@ -29,11 +22,18 @@ XML parser
   Need to unificate XML callback module interface and possible future HTML
   callback module interface
 
+- Check character references for valid range?
+
+- Try to optimize references handling
+
 - Add callback for ignorable whitespace?
 
 - Parse entity declarations?
 
 - Parse/ignore <!DOCTYPE
+
+- Allow start_element callback say to parse tag content as characters? Need
+  to be careful with CDATA sub-elements.
 
 - Add independent callback interface (or just function) to request decoder?
 
