@@ -161,18 +161,20 @@ constants_test_() -> [
 xml_errors_test_() -> [
     ?_assertError({incomplete, #location{source="test", line=1, column=4}},
         get_chunked_trace([<<"<a>">>, eof])),
+    ?_assertError({badtag, #location{source="test", line=1, column=8}},
+        get_trace(<<"<a></a><b></b>">>)),
     ?_assertError({badtag, #location{source="test", line=1, column=1}},
-        simplexml:parse(<<"</>">>, "test", ?MODULE, [])),
+        get_trace(<<"</>">>)),
     ?_assertError({badtag, #location{source="test", line=1, column=1}},
-        simplexml:parse(<<"< tag/>">>, "test", ?MODULE, [])),
+        get_trace(<<"< tag/>">>)),
     ?_assertError({badattr, #location{source="test", line=1, column=6}},
-        simplexml:parse(<<"<tag =/>">>, "test", ?MODULE, [])),
+        get_trace(<<"<tag =/>">>)),
     ?_assertError({badattr, #location{source="test", line=1, column=10}},
-        simplexml:parse(<<"<tag name/>">>, "test", ?MODULE, [])),
+        get_trace(<<"<tag name/>">>)),
     ?_assertError({badattr, #location{source="test", line=1, column=10}},
-        simplexml:parse(<<"<tag name name=/>">>, "test", ?MODULE, [])),
+        get_trace(<<"<tag name name=/>">>)),
     ?_assertError({badattr, #location{source="test", line=1, column=13}},
-        simplexml:parse(<<"<tag n1='v1'n2='v2'/>">>, "test", ?MODULE, []))
+        get_trace(<<"<tag n1='v1'n2='v2'/>">>))
     ].
 
 

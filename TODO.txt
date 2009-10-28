@@ -13,8 +13,6 @@ XML parser
 
 - Add encoding handling and Unicode decoding
 
-- Disallow multiple root elements
-
 - Allow start_element callback say to parse tag content as characters? Need
   to be careful with CDATA sub-elements.
 

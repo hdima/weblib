@@ -82,7 +82,8 @@
     location,
     tail=(<<>>),
     stack=[],
-    decoder
+    decoder,
+    seen_root=false
     }).
 
 
@@ -176,14 +177,15 @@ parse_element(Chunk, ParserState) ->
     B = ParserState#state.behaviour,
     try parse_term(Chunk, ParserState#state.location,
             ParserState#state.decoder) of
-        {{open_tag, Tag, Attributes}, Tail, Location} ->
-            {ok, State} = B:start_element(Tag, Attributes,
-                ParserState#state.location, ParserState#state.state),
-            Stack = ParserState#state.stack,
-            parse_element(Tail, ParserState#state{state=State,
+        {{open_tag, Tag, Attrs}, Tail, Location} ->
+            NewParserState = update_state_if_root(ParserState),
+            {ok, State} = B:start_element(Tag, Attrs,
+                NewParserState#state.location, NewParserState#state.state),
+            Stack = NewParserState#state.stack,
+            parse_element(Tail, NewParserState#state{state=State,
                 stack=[Tag | Stack], location=Location});
-        {{open_close_tag, Tag, Attributes}, Tail, Location} ->
-            {ok, State} = B:start_element(Tag, Attributes,
+        {{open_close_tag, Tag, Attrs}, Tail, Location} ->
+            {ok, State} = B:start_element(Tag, Attrs,
                 ParserState#state.location, ParserState#state.state),
             {ok, State2} = B:end_element(
                 Tag, ParserState#state.location, State),
@@ -213,6 +215,23 @@ parse_element(Chunk, ParserState) ->
         throw:need_more_data ->
             ParserState#state{tail=Chunk}
     end.
+
+
+%%
+%% @doc Update parser state in case of root element
+%% @spec update_state_if_root(ParserState) -> NewParserState
+%%      ParserState = record()
+%%      NewParserState = record()
+%%
+update_state_if_root(#state{stack=[]}=ParserState) ->
+    if
+        ParserState#state.seen_root ->
+            erlang:error({badtag, ParserState#state.location});
+        true ->
+            ParserState#state{seen_root=true}
+    end;
+update_state_if_root(ParserState) ->
+    ParserState.
 
 
 %%
