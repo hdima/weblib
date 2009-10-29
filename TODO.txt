@@ -9,22 +9,7 @@ XML parser
 
 - Add encoding handling and Unicode decoding
 
-- Parse XML namespaces.
-  
-  Maybe tag callback should pass the following information?
-
-    {startElement, Uri, LocalName, QualifiedName, Attributes}
-
-    where: Attributes = [{Uri, Prefix, AttributeName, Value}]
-
-    and: {endElement, Uri, LocalName, QualifiedName}
-
-  Need to unificate XML callback module interface and possible future HTML
-  callback module interface
-
 - Check character references for valid range?
-
-- Try to optimize references handling
 
 - Add callback for ignorable whitespace?
 

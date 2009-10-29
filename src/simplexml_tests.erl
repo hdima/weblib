@@ -93,13 +93,6 @@ flush_possible_messages() ->
     end.
 
 
-get_trace(Chunk) ->
-    flush_possible_messages(),
-    Server = self(),
-    {ok, {Server, N}} = simplexml:parse(Chunk, "test", ?MODULE, {Server, 0}),
-    get_callbacks(N).
-
-
 get_callbacks(N) ->
     self() ! eof,
     get_callbacks([], N).
@@ -118,20 +111,21 @@ get_callbacks(List, N) ->
     end.
 
 
-get_chunked_trace(Chunks) ->
+get_trace([Chunk | Chunks]) ->
     flush_possible_messages(),
-    get_chunked_trace(Chunks, none).
-
-get_chunked_trace([Chunk | Chunks], none) ->
     Server = self(),
-    {continue, ParserState} = simplexml:parse(
-        Chunk, "test", ?MODULE, {Server, 0}),
-    get_chunked_trace(Chunks, {ParserState, Server});
-get_chunked_trace([Chunk | Chunks], {ParserState, Server}) ->
+    case simplexml:parse(Chunk, "test", ?MODULE, {Server, 0}) of
+        {continue, ParserState} ->
+            get_trace(Chunks, {ParserState, Server});
+        {ok, {Server, N}} when Chunks =:= [] ->
+            get_callbacks(N)
+    end.
+
+get_trace([Chunk | Chunks], {ParserState, Server}) ->
     case simplexml:parse(Chunk, ParserState) of
-        {continue, NewId} ->
-            get_chunked_trace(Chunks, {NewId, Server});
-        {ok, {Server, N}} ->
+        {continue, NewParserState} ->
+            get_trace(Chunks, {NewParserState, Server});
+        {ok, {Server, N}} when Chunks =:= [] ->
             get_callbacks(N)
     end.
 
@@ -160,240 +154,351 @@ constants_test_() -> [
 
 xml_errors_test_() -> [
     ?_assertError({incomplete, #location{source="test", line=1, column=4}},
-        get_chunked_trace([<<"<a>">>, eof])),
+        get_trace([<<"<a>">>, eof])),
+    ?_assertError({badtag, #location{source="test", line=1, column=4}},
+        get_trace([<<"<a></b>">>])),
     ?_assertError({badtag, #location{source="test", line=1, column=8}},
-        get_trace(<<"<a></a><b></b>">>)),
+        get_trace([<<"<a></a><b></b>">>])),
     ?_assertError({badtag, #location{source="test", line=1, column=1}},
-        get_trace(<<"</>">>)),
+        get_trace([<<"</>">>])),
     ?_assertError({badtag, #location{source="test", line=1, column=1}},
-        get_trace(<<"< tag/>">>)),
+        get_trace([<<"< tag/>">>])),
     ?_assertError({badattr, #location{source="test", line=1, column=6}},
-        get_trace(<<"<tag =/>">>)),
+        get_trace([<<"<tag =/>">>])),
     ?_assertError({badattr, #location{source="test", line=1, column=10}},
-        get_trace(<<"<tag name/>">>)),
+        get_trace([<<"<tag name/>">>])),
     ?_assertError({badattr, #location{source="test", line=1, column=10}},
-        get_trace(<<"<tag name name=/>">>)),
+        get_trace([<<"<tag name name=/>">>])),
     ?_assertError({badattr, #location{source="test", line=1, column=13}},
-        get_trace(<<"<tag n1='v1'n2='v2'/>">>))
+        get_trace([<<"<tag n1='v1'n2='v2'/>">>]))
     ].
 
 
 simple_xml_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag/>">>)),
+        get_trace([<<"<tag/>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag />">>)),
+        get_trace([<<"<tag />">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag></tag>">>)),
+        get_trace([<<"<tag></tag>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag ></tag >">>)),
+        get_trace([<<"<tag ></tag >">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
+            {start_element, {"", "tag", "tag"}, [], _},
             {characters, "Data", _},
-            {end_element, "tag", _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag>Data</tag>">>)),
+        get_trace([<<"<tag>Data</tag>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
+            {start_element, {"", "a", "a"}, [], _},
             {characters, "A", _},
-            {start_element, "b", [], _},
+            {start_element, {"", "b", "b"}, [], _},
             {characters, "B", _},
-            {start_element, "c", [], _},
-            {end_element, "c", _},
-            {end_element, "b", _},
-            {end_element, "a", _},
+            {start_element, {"", "c", "c"}, [], _},
+            {end_element, {"", "c", "c"}, _},
+            {end_element, {"", "b", "b"}, _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_trace(<<"<a>A<b>B<c/></b></a>">>))
+        get_trace([<<"<a>A<b>B<c/></b></a>">>]))
     ].
 
 
 simple_attributes_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [{"name", "value"}], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"},
+                [{{"", "name", "name"}, "value"}], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag name='value'/>">>)),
+        get_trace([<<"<tag name='value'/>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [{"name", " value "}], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"},
+                [{{"", "name", "name"}, " value "}], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag name = ' value ' />">>)),
+        get_trace([<<"<tag name = ' value ' />">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [{"n1", "v1"}, {"n2", "v2"}], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"},
+                [{{"", "n1", "n1"}, "v1"}, {{"", "n2", "n2"}, "v2"}], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag n1='v1' n2=\"v2\" />">>))
+        get_trace([<<"<tag n1='v1' n2=\"v2\" />">>]))
     ].
 
 
 continuation_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
+            {start_element, {"", "tag", "tag"}, [], _},
             {characters, "Da", _},
             {characters, "ta", _},
-            {end_element, "tag", _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<tag>Da">>, <<"ta</tag>">>])),
+        get_trace([<<"<tag>Da">>, <<"ta</tag>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<ta">>, <<"g/>">>])),
+        get_trace([<<"<ta">>, <<"g/>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [{"name", "value"}], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"},
+                [{{"", "name", "name"}, "value"}], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<">>, <<"ta">>, <<"g">>, <<" name">>, <<"='">>,
+        get_trace([<<"<">>, <<"ta">>, <<"g">>, <<" name">>, <<"='">>,
             <<"value">>, <<"'/>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
-            {start_element, "b", [], _},
-            {end_element, "b", _},
-            {start_element, "c", [], _},
-            {end_element, "c", _},
-            {end_element, "a", _},
+            {start_element, {"", "a", "a"}, [], _},
+            {start_element, {"", "b", "b"}, [], _},
+            {end_element, {"", "b", "b"}, _},
+            {start_element, {"", "c", "c"}, [], _},
+            {end_element, {"", "c", "c"}, _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<a><b/><c">>, <<"/></a>">>])),
+        get_trace([<<"<a><b/><c">>, <<"/></a>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [{"n", "v"}], _},
-            {end_element, "a", _},
+            {start_element, {"", "a", "a"}, [{{"", "n", "n"}, "v"}], _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<a n='v' ">>, <<" ></a>">>])),
+        get_trace([<<"<a n='v' ">>, <<" ></a>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
-            {end_element, "a", _},
+            {start_element, {"", "a", "a"}, [], _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<a></a ">>, <<" >">>]))
+        get_trace([<<"<a></a ">>, <<" >">>]))
     ].
 
 
 comments_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag><!-- Comment --></tag>">>))
+        get_trace([<<"<tag><!-- Comment --></tag>">>]))
     ].
 
 
 processing_instructions_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
-            {end_element, "tag", _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag><?target?></tag>">>))
+        get_trace([<<"<tag><?target?></tag>">>]))
     ].
 
 
 cdata_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
+            {start_element, {"", "tag", "tag"}, [], _},
             {characters, "<tag>Data</tag>", _},
-            {end_element, "tag", _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag><![CDATA[<tag>Data</tag>]]></tag>">>)),
+        get_trace([<<"<tag><![CDATA[<tag>Data</tag>]]></tag>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "tag", [], _},
+            {start_element, {"", "tag", "tag"}, [], _},
             {characters, "&#10;&#xf;&lt;", _},
-            {end_element, "tag", _},
+            {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
-        get_trace(<<"<tag><![CDATA[&#10;&#xf;&lt;]]></tag>">>))
+        get_trace([<<"<tag><![CDATA[&#10;&#xf;&lt;]]></tag>">>]))
     ].
 
 
 location_test_() -> [
         ?_assertEqual([
             {start_document, #location{source="test", line=1, column=1}},
-            {start_element, "a", [],
+            {start_element, {"", "a", "a"}, [],
                 #location{source="test", line=1, column=1}},
             {characters, " A \n ",
                 #location{source="test", line=1, column=4}},
-            {start_element, "b", [],
+            {start_element, {"", "b", "b"}, [],
                 #location{source="test", line=2, column=2}},
             {characters, " B \n ",
                 #location{source="test", line=2, column=5}},
-            {end_element, "b", #location{source="test", line=3, column=2}},
+            {end_element, {"", "b", "b"}, #location{source="test", line=3, column=2}},
             {characters, " \n ",
                 #location{source="test", line=3, column=6}},
-            {end_element, "a", #location{source="test", line=4, column=2}},
+            {end_element, {"", "a", "a"}, #location{source="test", line=4, column=2}},
             {end_document, #location{source="test", line=4, column=6}}
-            ], get_trace(<<"<a> A \r\n <b> B \n </b> \r </a>">>)),
+            ], get_trace([<<"<a> A \r\n <b> B \n </b> \r </a>">>])),
         ?_assertEqual([
             {start_document, #location{source="test", line=1, column=1}},
             {characters, " \n ", #location{source="test", line=2, column=5}},
             {characters, " \n ", #location{source="test", line=3, column=7}},
             {characters, "B \n ", #location{source="test", line=4, column=2}},
             {end_document, #location{source="test", line=5, column=5}}
-            ], get_trace(<<"<!-- \n --> \n <?a?> \r\n <![CDATA[B \r ]]>">>))
+            ], get_trace([<<"<!-- \n --> \n <?a?> \r\n <![CDATA[B \r ]]>">>]))
     ].
 
 
 reference_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
+            {start_element, {"", "a", "a"}, [], _},
             {characters, [10, 10], _},
-            {end_element, "a", _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_trace(<<"<a>&#10;&#xa;</a>">>)),
+        get_trace([<<"<a>&#10;&#xa;</a>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
+            {start_element, {"", "a", "a"}, [], _},
             {characters, "<>&'\"", _},
-            {end_element, "a", _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_trace(<<"<a>&lt;&gt;&amp;&apos;&quot;</a>">>)),
+        get_trace([<<"<a>&lt;&gt;&amp;&apos;&quot;</a>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [{"name", "<>&'\""}], _},
-            {end_element, "a", _},
+            {start_element, {"", "a", "a"},
+                [{{"", "name", "name"}, "<>&'\""}], _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_trace(<<"<a name='&lt;&gt;&amp;&apos;&quot;'/>">>))
+        get_trace([<<"<a name='&lt;&gt;&amp;&apos;&quot;'/>">>]))
     ].
 
 
 reference_errors_test_() -> [
     ?_assertError({badref, #location{source="test", line=1, column=6}},
-        get_trace(<<"<a>&#a;</a>">>)),
+        get_trace([<<"<a>&#a;</a>">>])),
     ?_assertError({badref, #location{source="test", line=1, column=7}},
-        get_trace(<<"<a>&#xg;</a>">>)),
+        get_trace([<<"<a>&#xg;</a>">>])),
     ?_assertError({badref, #location{source="test", line=1, column=6}},
-        get_trace(<<"<a>&#;</a>">>)),
+        get_trace([<<"<a>&#;</a>">>])),
     ?_assertError({badref, #location{source="test", line=1, column=7}},
-        get_trace(<<"<a>&#x;</a>">>)),
+        get_trace([<<"<a>&#x;</a>">>])),
     ?_assertError({badref, #location{source="test", line=1, column=6}},
-        get_trace(<<"<a>&#</a>">>)),
+        get_trace([<<"<a>&#</a>">>])),
     ?_assertError({badref, #location{source="test", line=1, column=7}},
-        get_trace(<<"<a>&#x</a>">>))
+        get_trace([<<"<a>&#x</a>">>]))
     ].
 
 
 reference_continuation_test_() -> [
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
+            {start_element, {"", "a", "a"}, [], _},
             {characters, [100], _},
-            {end_element, "a", _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<a>&#1">>, <<"00;</a>">>])),
+        get_trace([<<"<a>&#1">>, <<"00;</a>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
+            {start_element, {"", "a", "a"}, [], _},
             {characters, [16#fff], _},
-            {end_element, "a", _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<a>&#xf">>, <<"ff;</a>">>])),
+        get_trace([<<"<a>&#xf">>, <<"ff;</a>">>])),
     ?_assertMatch([{start_document, _},
-            {start_element, "a", [], _},
+            {start_element, {"", "a", "a"}, [], _},
             {characters, "'", _},
-            {end_element, "a", _},
+            {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_chunked_trace([<<"<a>&ap">>, <<"os;</a>">>]))
+        get_trace([<<"<a>&ap">>, <<"os;</a>">>]))
+    ].
+
+
+namespaces_test_() -> [
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "tag"},
+                [{{"", "xmlns", "xmlns"},
+                    "uri:test"}], _},
+            {end_element, {"uri:test", "tag", "tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<tag xmlns='uri:test'/>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "ns:tag"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:test"}], _},
+            {end_element, {"uri:test", "tag", "ns:tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<ns:tag xmlns:ns='uri:test'/>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "ns:tag"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:test"}], _},
+            {end_element, {"uri:test", "tag", "ns:tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<ns:tag xmlns:ns='uri:test'></ns:tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "ns:tag"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:test"}], _},
+            {start_element, {"uri:test", "a", "ns:a"}, [], _},
+            {end_element, {"uri:test", "a", "ns:a"}, _},
+            {end_element, {"uri:test", "tag", "ns:tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<ns:tag xmlns:ns='uri:test'><ns:a/></ns:tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "ns:tag"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:test"}], _},
+            {start_element, {"uri:new", "a", "ns:a"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:new"}], _},
+            {end_element, {"uri:new", "a", "ns:a"}, _},
+            {end_element, {"uri:test", "tag", "ns:tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<ns:tag xmlns:ns='uri:test'>">>,
+            <<"<ns:a xmlns:ns='uri:new'/></ns:tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "ns:tag"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:test"}], _},
+            {start_element, {"uri:new", "a", "ns:a"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:new"}], _},
+            {end_element, {"uri:new", "a", "ns:a"}, _},
+            {end_element, {"uri:test", "tag", "ns:tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<ns:tag xmlns:ns='uri:test'>">>,
+            <<"<ns:a xmlns:ns='uri:new'></ns:a></ns:tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "tag"},
+                [{{"", "xmlns", "xmlns"}, "uri:test"}], _},
+        {start_element, {"", "a", "a"},
+                [{{"", "xmlns", "xmlns"}, ""}], _},
+            {end_element, {"", "a", "a"}, _},
+            {end_element, {"uri:test", "tag", "tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<tag xmlns='uri:test'>">>,
+            <<"<a xmlns=''></a></tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"http://www.w3.org/XML/1998/namespace",
+                "tag", "xml:tag"}, [], _},
+            {end_element, {"http://www.w3.org/XML/1998/namespace",
+                "tag", "xml:tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<xml:tag/>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "tag"},
+                [{{"", "xmlns", "xmlns"}, "uri:test"},
+                    {{"", "name", "name"}, "value"}], _},
+            {end_element, {"uri:test", "tag", "tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<tag xmlns='uri:test' name='value'/>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"uri:test", "tag", "ns:tag"},
+                [{{"http://www.w3.org/2000/xmlns/", "ns", "xmlns:ns"},
+                    "uri:test"},
+                    {{"uri:test", "name", "ns:name"}, "value"}], _},
+            {end_element, {"uri:test", "tag", "ns:tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<ns:tag xmlns:ns='uri:test' ns:name='value'/>">>]))
+    ].
+
+
+namespaces_error_test_() -> [
+    ?_assertError({badns, #location{source="test", line=1, column=1}},
+        get_trace([<<"<a xmlns:a:b='attr'/>">>])),
+    ?_assertError({badns, #location{source="test", line=1, column=1}},
+        get_trace([<<"<ns:a:b/>">>])),
+    ?_assertError({badns, #location{source="test", line=1, column=1}},
+        get_trace([<<"<ns:a/>">>])),
+    ?_assertError({badns, #location{source="test", line=1, column=1}},
+        get_trace([<<"<ns:a xmlns='uri:test'/>">>])),
+    ?_assertError({badns, #location{source="test", line=1, column=1}},
+        get_trace([<<"<xmlns:a xmlns:xmlns='uri:test'/>">>]))
     ].

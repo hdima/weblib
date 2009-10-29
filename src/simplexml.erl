@@ -42,16 +42,22 @@
 %%          Result = {ok, State}
 %%
 %%      start_element(Tag, Attributes, Location, State) -> Result
-%%          Tag = string()
+%%          Tag = {Uri, LocalName, QualifiedName}
+%%          Uri = string()
+%%          LocalName = string()
+%%          QualifiedName = string()
 %%          Attributes = [{Key, Value} | ...]
-%%          Key = string()
+%%          Key = {Uri, LocalName, QualifiedName}
 %%          Value = string()
 %%          Location = record()
 %%          State = term()
 %%          Result = {ok, State}
 %%
 %%      end_element(Tag, Location, State) -> Result
-%%          Tag = string()
+%%          Tag = {Uri, LocalName, QualifiedName}
+%%          Uri = string()
+%%          LocalName = string()
+%%          QualifiedName = string()
 %%          Location = record()
 %%          State = term()
 %%          Result = {ok, State}
@@ -77,11 +83,12 @@
 
 %% Parser state
 -record(state, {
+    data=(<<>>),
     behaviour,
     state,
     location,
-    tail=(<<>>),
     stack=[],
+    namespaces=[],
     decoder,
     seen_root=false
     }).
@@ -116,13 +123,13 @@ parse(Chunk, Source, Behaviour, State) when is_binary(Chunk) ->
     {ok, NewState} = Behaviour:start_document(Location, State),
     % TODO: Need to be replaced with the real one
     Decoder = fun (S) -> binary_to_list(S) end,
-    ParserState = #state{behaviour=Behaviour, state=NewState, decoder=Decoder,
-        location=Location},
+    ParserState = #state{data=Chunk, behaviour=Behaviour,
+        state=NewState, decoder=Decoder, location=Location},
     case Chunk of
         <<>> ->
             {continue, ParserState};
         Chunk ->
-            parse_document(Chunk, ParserState)
+            parse_document(ParserState)
     end.
 
 
@@ -134,31 +141,30 @@ parse(Chunk, Source, Behaviour, State) when is_binary(Chunk) ->
 %%      Result = {continue, ParserState} | {ok, State}
 %%      Reason = term()
 %%
-parse(eof, #state{tail=(<<>>), stack=[]}=ParserState) ->
+parse(eof, #state{data=(<<>>), stack=[]}=ParserState) ->
     {ok, ParserState#state.state};
 parse(eof, ParserState) ->
     erlang:error({incomplete, ParserState#state.location});
 parse(Chunk, ParserState) when is_binary(Chunk) ->
-    Tail = ParserState#state.tail,
-    parse_document(<<Tail/binary, Chunk/binary>>,
-        ParserState#state{tail=(<<>>)}).
+    Data = <<(ParserState#state.data)/binary, Chunk/binary>>,
+    parse_document(ParserState#state{data=Data}).
 
 
 %%
 %% @doc Start or continue document parsing
-%% @spec parse_document(Chunk, ParserState) -> Result
-%%      Chunk = binary()
+%% @spec parse_document(ParserState) -> Result
 %%      ParserState = term()
 %%      Result = {continue, NewParserState} | {ok, State}
 %%      NewParserState = term()
 %%      State = term()
 %%
-parse_document(Chunk, ParserState) ->
-    case parse_element(Chunk, ParserState) of
-        #state{stack=[], tail=(<<>>)}=NewParserState ->
+parse_document(ParserState) ->
+    case parse_element(ParserState) of
+        #state{stack=[], data=(<<>>)}=NewParserState ->
             B = NewParserState#state.behaviour,
-            B:end_document(NewParserState#state.location,
-                NewParserState#state.state);
+            {ok, State} = B:end_document(NewParserState#state.location,
+                NewParserState#state.state),
+            {ok, State};
         NewParserState ->
             {continue, NewParserState}
     end.
@@ -166,54 +172,66 @@ parse_document(Chunk, ParserState) ->
 
 %%
 %% @doc Parse XML element
-%% @spec parse_element(Chunk, ParserState) -> NewParserState
-%%      Chunk = binary()
+%% @spec parse_element(ParserState) -> NewParserState
 %%      ParserState = term()
 %%      NewParserState = term()
 %%
-parse_element(<<>>, ParserState) ->
+parse_element(#state{data=(<<>>)}=ParserState) ->
     ParserState;
-parse_element(Chunk, ParserState) ->
-    B = ParserState#state.behaviour,
-    try parse_term(Chunk, ParserState#state.location,
-            ParserState#state.decoder) of
-        {{open_tag, Tag, Attrs}, Tail, Location} ->
+parse_element(#state{behaviour=B, location=Location}=ParserState) ->
+    Chunk = ParserState#state.data,
+    try parse_term(Chunk, Location, ParserState#state.decoder) of
+        {{open_tag, Tag, Attrs}, Tail, NewLocation} ->
             NewParserState = update_state_if_root(ParserState),
-            {ok, State} = B:start_element(Tag, Attrs,
-                NewParserState#state.location, NewParserState#state.state),
-            Stack = NewParserState#state.stack,
-            parse_element(Tail, NewParserState#state{state=State,
-                stack=[Tag | Stack], location=Location});
-        {{open_close_tag, Tag, Attrs}, Tail, Location} ->
-            {ok, State} = B:start_element(Tag, Attrs,
-                ParserState#state.location, ParserState#state.state),
-            {ok, State2} = B:end_element(
-                Tag, ParserState#state.location, State),
-            parse_element(Tail, ParserState#state{state=State2,
-                location=Location});
-        {{close_tag, Tag}, Tail, Location} ->
-            {ok, State} = B:end_element(
-                Tag, ParserState#state.location, ParserState#state.state),
+            TagNamespaces = get_tag_namespaces(Attrs, Location, []),
+            Stack = [{Tag, TagNamespaces} | NewParserState#state.stack],
+            Namespaces = add_namespaces(
+                NewParserState#state.namespaces, TagNamespaces),
+            NewTag = apply_namespace_to_name(Tag, Namespaces, Location),
+            NewAttrs = apply_namespaces_to_attrs(Attrs, Namespaces, Location),
+            {ok, State} = B:start_element(NewTag, NewAttrs,
+                Location, ParserState#state.state),
+            parse_element(NewParserState#state{state=State, data=Tail,
+                location=NewLocation, stack=Stack, namespaces=Namespaces});
+        {{open_close_tag, Tag, Attrs}, Tail, NewLocation} ->
+            TagNamespaces = get_tag_namespaces(Attrs, Location, []),
+            Namespaces = add_namespaces(
+                ParserState#state.namespaces, TagNamespaces),
+            NewTag = apply_namespace_to_name(Tag, Namespaces, Location),
+            NewAttrs = apply_namespaces_to_attrs(Attrs, Namespaces, Location),
+            {ok, State} = B:start_element(NewTag, NewAttrs,
+                Location, ParserState#state.state),
+            {ok, State2} = B:end_element(NewTag, Location, State),
+            parse_element(ParserState#state{state=State2,
+                data=Tail, location=NewLocation});
+        {{close_tag, Tag}, Tail, NewLocation} ->
             case ParserState#state.stack of
-                [Tag | Stack] ->
-                    parse_element(Tail, ParserState#state{state=State,
-                        stack=Stack, location=Location});
+                [{Tag, TagNamespaces} | Stack] ->
+                    Namespaces = remove_namespaces(
+                        ParserState#state.namespaces, TagNamespaces),
+                    NewTag = apply_namespace_to_name(Tag,
+                        ParserState#state.namespaces, Location),
+                    {ok, State} = B:end_element(
+                        NewTag, Location, ParserState#state.state),
+                    parse_element(ParserState#state{state=State,
+                        stack=Stack, data=Tail, location=NewLocation,
+                        namespaces=Namespaces});
                 _ ->
                     erlang:error({badtag, Location})
             end;
-        {{characters, Data}, Tail, Location} ->
-            {ok, State} = B:characters(
-                Data, ParserState#state.location, ParserState#state.state),
-            parse_element(Tail, ParserState#state{state=State,
-                location=Location});
-        {_, Tail, Location} ->
+        {{characters, Data}, Tail, NewLocation} ->
+            {ok, State} = B:characters(Data, Location,
+                ParserState#state.state),
+            parse_element(ParserState#state{state=State, data=Tail,
+                location=NewLocation});
+        {_, Tail, NewLocation} ->
             % Skip other elements
-            parse_element(Tail, ParserState#state{location=Location})
+            parse_element(ParserState#state{data=Tail, location=NewLocation})
     catch
         throw:bad_name ->
-            erlang:error({badtag, ParserState#state.location});
+            erlang:error({badtag, Location});
         throw:need_more_data ->
-            ParserState#state{tail=Chunk}
+            ParserState
     end.
 
 
@@ -235,17 +253,146 @@ update_state_if_root(ParserState) ->
 
 
 %%
+%% @doc Retrieve namespaces from attributes
+%% @spec get_tag_namespaces(Attrs, Location, Acc) -> Namepsaces
+%%      Attrs = [{Key, Value}]
+%%      Location = record()
+%%      Key = string()
+%%      Value = string()
+%%      Acc = list()
+%%      Namespaces = [{Ns, Uri}]
+%%      Ns = string()
+%%      Uri = string()
+%%
+get_tag_namespaces([{Key, Value} | Attrs], Location, Namespaces) ->
+    case string:tokens(Key, ":") of
+        ["xmlns"] ->
+            get_tag_namespaces(Attrs, Location, [{"", Value} | Namespaces]);
+        [_Ns, "xmlns"] ->
+            erlang:error({badns, Location});
+        ["xmlns", Ns] ->
+            get_tag_namespaces(Attrs, Location, [{Ns, Value} | Namespaces]);
+        [_Tag] ->
+            get_tag_namespaces(Attrs, Location, Namespaces);
+        [_Ns, _Tag] ->
+            get_tag_namespaces(Attrs, Location, Namespaces);
+        _ ->
+            erlang:error({badns, Location})
+    end;
+get_tag_namespaces([], _Location, Namespaces) ->
+    Namespaces.
+
+
+%%
+%% @doc Add namespaces to list
+%% @spec add_namespaces(Namespaces, TagNamespaces) -> NewNamespaces
+%%      Namespaces = [{Ns, Uri}]
+%%      Ns = string()
+%%      Uri = string()
+%%      TagNamespaces = [{Ns, Uri}]
+%%      NewNamespaces = [{Ns, Uri}]
+%%
+add_namespaces(Namespaces, [Info | TagNamespaces]) ->
+    add_namespaces([Info | Namespaces], TagNamespaces);
+add_namespaces(Namespaces, []) ->
+    Namespaces.
+
+
+%%
+%% @doc Remove namespaces from list
+%% @spec remove_namespaces(Namespaces, TagNamespaces) -> NewNamespaces
+%%      Namespaces = [{Ns, Uri}]
+%%      Ns = string()
+%%      Uri = string()
+%%      TagNamespaces = [{Ns, Uri}]
+%%      NewNamespaces = [{Ns, Uri}]
+%%
+remove_namespaces([_ | Namespaces], [_ | TagNamespaces]) ->
+    remove_namespaces(Namespaces, TagNamespaces);
+remove_namespaces(Namespaces, []) ->
+    Namespaces.
+
+
+%%
+%% @doc Apply namespace to name
+%% @spec apply_namespace_to_name(Name, Namespaces, Location) -> NewName
+%%      Name = string()
+%%      Namespaces = [{Ns, Uri}]
+%%      Ns = string()
+%%      Uri = string()
+%%      Location = record()
+%%      NewName = {Uri, LocalName, QualifiedName}
+%%      Uri = string()
+%%      LocalName = string()
+%%      QualifiedName = string()
+%%
+apply_namespace_to_name(Name, Namespaces, Location) ->
+    handle_namespace_and_name(string:tokens(Name, ":"),
+        Name, Namespaces, Location).
+
+handle_namespace_and_name([LocalName], Name, Namespaces, Location) ->
+    apply_namespace_to_name("", LocalName, Name, Namespaces, Location);
+handle_namespace_and_name(["xml", LocalName], Name, _Namespaces, _Location) ->
+    {"http://www.w3.org/XML/1998/namespace", LocalName, Name};
+handle_namespace_and_name(["xmlns", LocalName],
+        Name, _Namespaces, _Location) ->
+    {"http://www.w3.org/2000/xmlns/", LocalName, Name};
+handle_namespace_and_name([_Prefix, _LocalName], _Name, Namespaces, Location)
+        when Namespaces =:= [] ->
+    erlang:error({badns, Location});
+handle_namespace_and_name([Prefix, LocalName], Name, Namespaces, Location) ->
+    apply_namespace_to_name(Prefix, LocalName, Name, Namespaces, Location);
+handle_namespace_and_name(_Pattern, _Name, _Namespaces, Location) ->
+    erlang:error({badns, Location}).
+
+
+apply_namespace_to_name(Ns, LocalName, Name, [{Ns, Uri} | _Namespaces], _L) ->
+    {Uri, LocalName, Name};
+apply_namespace_to_name(Prefix, LocalName, Name, [_ | Namespaces], L) ->
+    apply_namespace_to_name(Prefix, LocalName, Name, Namespaces, L);
+apply_namespace_to_name("", _LocalName, Name, [], _L) ->
+    {"", Name, Name};
+apply_namespace_to_name(_Prefix, _LocalName, _Name, [], L) ->
+    erlang:error({badns, L}).
+
+
+%%
+%% @doc Apply namespaces to attribute names
+%% @spec apply_namespaces_to_attrs(Attrs, Namespaces, Location) -> NewAttrs
+%%      Attrs = [{Name, Value}]
+%%      Name = string()
+%%      Value = string()
+%%      Namespaces = [{Ns, Uri}]
+%%      Ns = string()
+%%      Uri = string()
+%%      Location = record()
+%%      NewAttrs = [{NewName, Value}]
+%%      NewName = {Uri, LocalName, QualifiedName}
+%%      Uri = string()
+%%      LocalName = string()
+%%      QualifiedName = string()
+%%
+apply_namespaces_to_attrs(Attrs, Namespaces, Location) ->
+    [{apply_namespace_to_attr_name(N, Namespaces, Location), V}
+        || {N, V} <- Attrs].
+
+apply_namespace_to_attr_name(Name, Namespaces, Location) ->
+    case string:tokens(Name, ":") of
+        [_LocalName] ->
+            {"", Name, Name};
+        Pattern ->
+            handle_namespace_and_name(Pattern, Name, Namespaces, Location)
+    end.
+
+
+%%
 %% @doc Parse single XML term
 %% @throws need_more_data
 %% @spec parse_term(Chunk, Location, Decoder) -> Result
 %%      Chunk = binary()
 %%      Location = record()
-%%      Source = string()
-%%      Line = integer()
-%%      Col = integer()
 %%      Decoder = function()
-%%      Result = {TermInfo, Tail}
-%%      Tail = binary()
+%%      Result = {TermInfo, Tail, NewLocation}
 %%      TermInfo = {open_tag, Tag, Attributes}
 %%          | {open_close_tag, Tag, Attributes}
 %%          | {close_tag, Tag}
@@ -257,11 +404,13 @@ update_state_if_root(ParserState) ->
 %%      Key = string()
 %%      Value = string()
 %%      Data = string()
+%%      Tail = binary()
+%%      NewLocation = record()
 %%
-parse_term(<<"<!--", Tail/binary>>, Location, _) ->
+parse_term(<<"<!--", Tail/binary>>, Location, _Decoder) ->
     {NewTail, NewLocation} = skip_over(Tail, <<"-->">>, ?inc_col(Location, 4)),
     {comment, NewTail, NewLocation};
-parse_term(<<"<?", Tail/binary>>, Location, _) ->
+parse_term(<<"<?", Tail/binary>>, Location, _Decoder) ->
     {NewTail, NewLocation} = skip_over(Tail, <<"?>">>, ?inc_col(Location, 2)),
     {processing_instruction, NewTail, NewLocation};
 parse_term(<<"<![CDATA[", Chunk/binary>>, Location, Decoder) ->

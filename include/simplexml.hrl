@@ -10,12 +10,14 @@
 -define(is_attrvaluechar(C, Q), C =/= $<, C =/= Q).
 -define(is_quote(C), C =:= $'; C =:= $").
 
+%%
 %% File location information
+%%
 -record(location, {
     source=unknown,
     line=1,
     column=1
     }).
 
--define(inc_col(L, N), L#location{column=L#location.column + N}).
--define(inc_line(L), L#location{line=L#location.line + 1, column=1}).
+-define(inc_col(L, N), (L)#location{column=(L)#location.column + N}).
+-define(inc_line(L), (L)#location{line=(L)#location.line + 1, column=1}).
