@@ -531,8 +531,7 @@ parse_entity_ref(_Data, Location, _Acc) ->
 %%      Chunk = binary()
 %%      Location = record()
 %%      Acc = integer()
-%%      Result = {String, Tail, NewLocation}
-%%      String = string()
+%%      Result = {char(), Tail, NewLocation}
 %%      Tail = binary()
 %%      NewLocation = record()
 %%
@@ -541,7 +540,7 @@ parse_decimal(<<>>, _Location, _Acc) ->
 parse_decimal(<<";", _Tail/binary>>, Location, 0) ->
     erlang:error({badref, Location});
 parse_decimal(<<";", Tail/binary>>, Location, Acc) ->
-    {[Acc], Tail, ?inc_col(Location, 1)};
+    {Acc, Tail, ?inc_col(Location, 1)};
 parse_decimal(<<C, Tail/binary>>, Location, Acc) when C >= $0, C =< $9 ->
     parse_decimal(Tail, ?inc_col(Location, 1), Acc * 10 + C - $0);
 parse_decimal(_Tail, Location, _Acc) ->
@@ -555,8 +554,7 @@ parse_decimal(_Tail, Location, _Acc) ->
 %%      Chunk = binary()
 %%      Location = record()
 %%      Acc = integer()
-%%      Result = {String, Tail, NewLocation}
-%%      String = string()
+%%      Result = {char(), Tail, NewLocation}
 %%      Tail = binary()
 %%      NewLocation = record()
 %%
@@ -565,7 +563,7 @@ parse_hex(<<>>, _Location, _Acc) ->
 parse_hex(<<";", _Tail/binary>>, Location, 0) ->
     erlang:error({badref, Location});
 parse_hex(<<";", Tail/binary>>, Location, Acc) ->
-    {[Acc], Tail, ?inc_col(Location, 1)};
+    {Acc, Tail, ?inc_col(Location, 1)};
 parse_hex(<<C, Tail/binary>>, Location, Acc) when C >= $0, C =< $9 ->
     parse_hex(Tail, ?inc_col(Location, 1), Acc * 16 + C - $0);
 parse_hex(<<C, Tail/binary>>, Location, Acc) when C >= $a, C =< $f ->
