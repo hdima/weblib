@@ -459,15 +459,18 @@ parse_term(Chunk, Location, Decoder) ->
 %%      NewLocation = record()
 %%
 parse_data(<<>>, Location, _Decoder, Parts) ->
-    {lists:flatten(lists:reverse(Parts)), <<>>, Location};
+    postprocess_data(Parts, <<>>, Location);
 parse_data(<<"<", _/binary>>=Tail, Location, _Decoder, Parts) ->
-    {lists:flatten(lists:reverse(Parts)), Tail, Location};
+    postprocess_data(Parts, Tail, Location);
 parse_data(<<"&", Ref/binary>>, Location, Decoder, Parts) ->
     {String, Tail, NewLocation} = parse_reference(Ref, ?inc_col(Location, 1)),
     parse_data(Tail, NewLocation, Decoder, [String | Parts]);
 parse_data(Data, Location, Decoder, Parts) ->
     {Binary, Tail, NewLocation} = parse_binary_data(Data, Location, <<>>),
     parse_data(Tail, NewLocation, Decoder, [Decoder(Binary) | Parts]).
+
+postprocess_data(Parts, Tail, Location) ->
+    {lists:flatten(lists:reverse(Parts)), Tail, Location}.
 
 
 %%
@@ -781,7 +784,7 @@ parse_attr_value(<<C, Tail/binary>>, Location, Decoder, [], none)
         when ?is_quote(C) ->
     parse_attr_value(Tail, ?inc_col(Location, 1), Decoder, [], C);
 parse_attr_value(<<Q, Tail/binary>>, Location, _Decoder, Parts, Q) ->
-    {lists:flatten(lists:reverse(Parts)), Tail, ?inc_col(Location, 1)};
+    postprocess_data(Parts, Tail, ?inc_col(Location, 1));
 parse_attr_value(<<"&", Ref/binary>>, Location, Decoder, Parts, Q) ->
     {String, Tail, NewLocation} = parse_reference(Ref, ?inc_col(Location, 1)),
     parse_attr_value(Tail, NewLocation, Decoder, [String | Parts], Q);
