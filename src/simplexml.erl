@@ -495,22 +495,22 @@ parse_reference(Data, Location) ->
 %%      Location = record()
 %%      Acc = binary()
 %%      Result = {String, Tail, NewLocation}
-%%      String = string()
+%%      String = char() | string()
 %%      Tail = binary()
 %%      NewLocation = record()
 %%
 parse_entity_ref(<<>>, _Location, _Acc) ->
     throw(need_more_data);
 parse_entity_ref(<<";", Tail/binary>>, Location, <<"lt">>) ->
-    {"<", Tail, ?inc_col(Location, 1)};
+    {$<, Tail, ?inc_col(Location, 1)};
 parse_entity_ref(<<";", Tail/binary>>, Location, <<"gt">>) ->
-    {">", Tail, ?inc_col(Location, 1)};
+    {$>, Tail, ?inc_col(Location, 1)};
 parse_entity_ref(<<";", Tail/binary>>, Location, <<"amp">>) ->
-    {"&", Tail, ?inc_col(Location, 1)};
+    {$&, Tail, ?inc_col(Location, 1)};
 parse_entity_ref(<<";", Tail/binary>>, Location, <<"apos">>) ->
-    {"'", Tail, ?inc_col(Location, 1)};
+    {$', Tail, ?inc_col(Location, 1)};
 parse_entity_ref(<<";", Tail/binary>>, Location, <<"quot">>) ->
-    {"\"", Tail, ?inc_col(Location, 1)};
+    {$", Tail, ?inc_col(Location, 1)};
 parse_entity_ref(<<";", _/binary>>, Location, _Acc) ->
     erlang:error({badref, Location});
 parse_entity_ref(<<C, Tail/binary>>, Location, <<>>)
