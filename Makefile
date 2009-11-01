@@ -25,27 +25,30 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-all: compile
+BEAMS=$(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
+INCLUDE_DIRS=-I include $(patsubst %,-I %,$(wildcard deps/*/include))
+EBINS=$(patsubst %,-pa %,$(wildcard deps/*/ebin)) -pa ebin
+INCLUDES=$(wildcard deps/*/include/*.hrl) $(wildcard include/*.hrl)
 
-compile: behaviours $(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
+
+compile: behaviours $(BEAMS)
 
 behaviours: ebin/http_client.beam ebin/simplexml.beam
 
-ebin/%.beam: src/%.erl $(wildcard include/*.hrl)
-	erlc -Wall -I include -I deps/*/include -pa deps/*/ebin -pa ebin \
-		-o ebin/ $<
+ebin/%.beam: src/%.erl $(INCLUDES)
+	erlc -v -Wall $(INCLUDE_DIRS) $(EBINS) -o ebin/ $<
 
 test: compile
-	erl -noshell -pa deps/*/ebin -pa ebin -s newslib test -s init stop
+	erl -noshell $(EBINS) -s newslib test -s init stop
 
 test-verbose: compile
-	erl -noshell -pa deps/*/ebin -pa ebin -s newslib test verbose -s init stop
+	erl -noshell $(EBINS) -s newslib test verbose -s init stop
 
 doc: compile
-	erl -noshell -pa deps/*/ebin -pa ebin -s newslib generate_docs -s init stop
+	erl -noshell $(EBINS) -s newslib generate_docs -s init stop
 
 check:
-	dialyzer -I include --src -c src
+	dialyzer $(INCLUDE_DIRS) --src -c src
 
 clean:
 	rm -f ebin/*.beam erl_crash.dump \
