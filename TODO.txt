@@ -63,3 +63,9 @@ HTTP client
 - HTTPS support
 
 - TCP6 support?
+
+
+Crawler
+-------
+
+- Store URLs in database
