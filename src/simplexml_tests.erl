@@ -152,7 +152,14 @@ constants_test_() -> [
     ].
 
 
-xml_errors_test_() -> [
+setup() ->
+    encodings:start().
+
+cleanup(_) ->
+    encodings:stop().
+
+
+xml_errors_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertError({incomplete, #location{source="test", line=1, column=4}},
         get_trace([<<"<a>">>, eof])),
     ?_assertError({badtag, #location{source="test", line=1, column=4}},
@@ -171,10 +178,10 @@ xml_errors_test_() -> [
         get_trace([<<"<tag name name=/>">>])),
     ?_assertError({badattr, #location{source="test", line=1, column=13}},
         get_trace([<<"<tag n1='v1'n2='v2'/>">>]))
-    ].
+    ]}.
 
 
-simple_xml_test_() -> [
+simple_xml_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "tag", "tag"}, [], _},
             {end_element, {"", "tag", "tag"}, _},
@@ -212,10 +219,10 @@ simple_xml_test_() -> [
             {end_element, {"", "a", "a"}, _},
             {end_document, _}],
         get_trace([<<"<a>A<b>B<c/></b></a>">>]))
-    ].
+    ]}.
 
 
-simple_attributes_test_() -> [
+simple_attributes_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "tag", "tag"},
                 [{{"", "name", "name"}, "value"}], _},
@@ -234,10 +241,10 @@ simple_attributes_test_() -> [
             {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
         get_trace([<<"<tag n1='v1' n2=\"v2\" />">>]))
-    ].
+    ]}.
 
 
-continuation_test_() -> [
+continuation_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "tag", "tag"}, [], _},
             {characters, "Da", _},
@@ -276,28 +283,28 @@ continuation_test_() -> [
             {end_element, {"", "a", "a"}, _},
             {end_document, _}],
         get_trace([<<"<a></a ">>, <<" >">>]))
-    ].
+    ]}.
 
 
-comments_test_() -> [
+comments_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "tag", "tag"}, [], _},
             {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
         get_trace([<<"<tag><!-- Comment --></tag>">>]))
-    ].
+    ]}.
 
 
-processing_instructions_test_() -> [
+processing_instructions_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "tag", "tag"}, [], _},
             {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
         get_trace([<<"<tag><?target?></tag>">>]))
-    ].
+    ]}.
 
 
-cdata_test_() -> [
+cdata_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "tag", "tag"}, [], _},
             {characters, "<tag>Data</tag>", _},
@@ -310,10 +317,10 @@ cdata_test_() -> [
             {end_element, {"", "tag", "tag"}, _},
             {end_document, _}],
         get_trace([<<"<tag><![CDATA[&#10;&#xf;&lt;]]></tag>">>]))
-    ].
+    ]}.
 
 
-location_test_() -> [
+location_test_() -> {setup, fun setup/0, fun cleanup/1, [
         ?_assertEqual([
             {start_document, #location{source="test", line=1, column=1}},
             {start_element, {"", "a", "a"}, [],
@@ -324,10 +331,12 @@ location_test_() -> [
                 #location{source="test", line=2, column=2}},
             {characters, " B \n ",
                 #location{source="test", line=2, column=5}},
-            {end_element, {"", "b", "b"}, #location{source="test", line=3, column=2}},
+            {end_element, {"", "b", "b"},
+                #location{source="test", line=3, column=2}},
             {characters, " \n ",
                 #location{source="test", line=3, column=6}},
-            {end_element, {"", "a", "a"}, #location{source="test", line=4, column=2}},
+            {end_element, {"", "a", "a"},
+                #location{source="test", line=4, column=2}},
             {end_document, #location{source="test", line=4, column=6}}
             ], get_trace([<<"<a> A \r\n <b> B \n </b> \r </a>">>])),
         ?_assertEqual([
@@ -335,12 +344,17 @@ location_test_() -> [
             {characters, " \n ", #location{source="test", line=2, column=5}},
             {characters, " \n ", #location{source="test", line=3, column=7}},
             {characters, "B \n ", #location{source="test", line=4, column=2}},
-            {end_document, #location{source="test", line=5, column=5}}
-            ], get_trace([<<"<!-- \n --> \n <?a?> \r\n <![CDATA[B \r ]]>">>]))
-    ].
+            {start_element, {"", "a", "a"}, [],
+                #location{source="test", line=5, column=5}},
+            {end_element, {"", "a", "a"},
+                #location{source="test", line=5, column=5}},
+            {end_document, #location{source="test", line=5, column=9}}
+            ], get_trace([<<"<!-- \n --> \n <?a?>">>,
+                <<" \r\n <![CDATA[B \r ]]><a/>">>]))
+    ]}.
 
 
-reference_test_() -> [
+reference_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "a", "a"}, [], _},
             {characters, [10, 10], _},
@@ -359,10 +373,10 @@ reference_test_() -> [
             {end_element, {"", "a", "a"}, _},
             {end_document, _}],
         get_trace([<<"<a name='&lt;&gt;&amp;&apos;&quot;'/>">>]))
-    ].
+    ]}.
 
 
-reference_errors_test_() -> [
+reference_errors_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertError({badref, #location{source="test", line=1, column=6}},
         get_trace([<<"<a>&#a;</a>">>])),
     ?_assertError({badref, #location{source="test", line=1, column=7}},
@@ -375,10 +389,10 @@ reference_errors_test_() -> [
         get_trace([<<"<a>&#</a>">>])),
     ?_assertError({badref, #location{source="test", line=1, column=7}},
         get_trace([<<"<a>&#x</a>">>]))
-    ].
+    ]}.
 
 
-reference_continuation_test_() -> [
+reference_continuation_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"", "a", "a"}, [], _},
             {characters, [100], _},
@@ -397,10 +411,10 @@ reference_continuation_test_() -> [
             {end_element, {"", "a", "a"}, _},
             {end_document, _}],
         get_trace([<<"<a>&ap">>, <<"os;</a>">>]))
-    ].
+    ]}.
 
 
-namespaces_test_() -> [
+namespaces_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertMatch([{start_document, _},
             {start_element, {"uri:test", "tag", "tag"},
                 [{{"", "xmlns", "xmlns"},
@@ -487,10 +501,10 @@ namespaces_test_() -> [
             {end_element, {"uri:test", "tag", "ns:tag"}, _},
             {end_document, _}],
         get_trace([<<"<ns:tag xmlns:ns='uri:test' ns:name='value'/>">>]))
-    ].
+    ]}.
 
 
-namespaces_error_test_() -> [
+namespaces_error_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertError({badns, #location{source="test", line=1, column=1}},
         get_trace([<<"<a xmlns:a:b='attr'/>">>])),
     ?_assertError({badns, #location{source="test", line=1, column=1}},
@@ -501,4 +515,48 @@ namespaces_error_test_() -> [
         get_trace([<<"<ns:a xmlns='uri:test'/>">>])),
     ?_assertError({badns, #location{source="test", line=1, column=1}},
         get_trace([<<"<xmlns:a xmlns:xmlns='uri:test'/>">>]))
-    ].
+    ]}.
+
+
+xml_declaration_test_() -> {setup, fun setup/0, fun cleanup/1, [
+    ?_assertMatch([{start_document, _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {characters, [16#442,16#435,16#441,16#442], _},
+            {end_element, {"", "tag", "tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<tag>">>,
+            <<16#d1,16#82,16#d0,16#b5,16#d1,16#81,16#d1,16#82>>,
+            <<"</tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {characters, [16#442,16#435,16#441,16#442], _},
+            {end_element, {"", "tag", "tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<?xml version='1.0' encoding='utf-8'?><tag>">>,
+            <<16#d1,16#82,16#d0,16#b5,16#d1,16#81,16#d1,16#82>>,
+            <<"</tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {characters, [16#442,16#435,16#441,16#442], _},
+            {end_element, {"", "tag", "tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<?xml version='1.0' encoding='windows-1251'?><tag>">>,
+            <<16#f2,16#e5,16#f1,16#f2>>, <<"</tag>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"", "tag", "tag"}, [], _},
+            {characters, [16#442,16#435,16#441,16#442], _},
+            {end_element, {"", "tag", "tag"}, _},
+            {end_document, _}],
+        get_trace([<<"<">>,<<"?">>,<<"xml">>,<<" version">>,<<"=">>,
+            <<"'1.0'">>,<<" encoding">>,<<"='windows">>,<<"-1251">>,<<"'">>,
+            <<"?">>,<<">">>,<<"<tag>">>, <<16#f2,16#e5,16#f1,16#f2>>,
+            <<"</tag>">>]))
+    ]}.
+
+
+xml_declaration_error_test_() -> {setup, fun setup/0, fun cleanup/1, [
+    ?_assertError({badtag, #location{source="test", line=1, column=4}},
+        get_trace([<<"<a><?xml version='1.0'?></a>">>])),
+    ?_assertError({bad_encoding, #location{source="test", line=1, column=1}},
+        get_trace([<<"<?xml version='1.0' encoding='unknown'?><a/>">>]))
+    ]}.

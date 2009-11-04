@@ -29,6 +29,7 @@ BEAMS=$(patsubst src/%.erl,ebin/%.beam,$(wildcard src/*.erl))
 INCLUDE_DIRS=-I include $(patsubst %,-I %,$(wildcard deps/*/include))
 EBINS=$(patsubst %,-pa %,$(wildcard deps/*/ebin)) -pa ebin
 INCLUDES=$(wildcard deps/*/include/*.hrl) $(wildcard include/*.hrl)
+SRC_DIRS=src $(wildcard deps/*/src)
 
 
 compile: behaviours $(BEAMS)
@@ -48,7 +49,7 @@ doc: compile
 	erl -noshell $(EBINS) -s newslib generate_docs -s init stop
 
 check:
-	dialyzer $(INCLUDE_DIRS) --src -c src
+	dialyzer $(INCLUDE_DIRS) --src -c $(SRC_DIRS)
 
 clean:
 	rm -f ebin/*.beam erl_crash.dump \

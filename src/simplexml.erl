@@ -90,7 +90,7 @@
     stack=[],
     namespaces=[],
     decoder,
-    seen_root=false
+    doc_part=unknown
     }).
 
 
@@ -121,15 +121,18 @@ behaviour_info(_Other) ->
 parse(Chunk, Source, Behaviour, State) when is_binary(Chunk) ->
     Location = #location{source=Source},
     {ok, NewState} = Behaviour:start_document(Location, State),
-    % TODO: Need to be replaced with the real one
-    Decoder = fun (S) -> binary_to_list(S) end,
-    ParserState = #state{data=Chunk, behaviour=Behaviour,
-        state=NewState, decoder=Decoder, location=Location},
-    case Chunk of
-        <<>> ->
-            {continue, ParserState};
-        Chunk ->
-            parse_document(ParserState)
+    case encodings:get_encoder_decoder(utf8) of
+        {ok, _, Decoder} ->
+            ParserState = #state{data=Chunk, behaviour=Behaviour,
+                state=NewState, decoder=Decoder, location=Location},
+            case Chunk of
+                <<>> ->
+                    {continue, ParserState};
+                Chunk ->
+                    parse_document(ParserState)
+            end;
+        {error, badarg} ->
+            erlang:error({bad_encoding, Location})
     end.
 
 
@@ -160,7 +163,8 @@ parse(Chunk, ParserState) when is_binary(Chunk) ->
 %%
 parse_document(ParserState) ->
     case parse_element(ParserState) of
-        #state{stack=[], data=(<<>>)}=NewParserState ->
+        #state{stack=[], doc_part=element}=NewParserState ->
+            % Document tail is ignored
             B = NewParserState#state.behaviour,
             {ok, State} = B:end_document(NewParserState#state.location,
                 NewParserState#state.state),
@@ -181,6 +185,27 @@ parse_element(#state{data=(<<>>)}=ParserState) ->
 parse_element(#state{behaviour=B, location=Location}=ParserState) ->
     Chunk = ParserState#state.data,
     try parse_term(Chunk, Location, ParserState#state.decoder) of
+        {{xml_decl, Attrs}, Tail, NewLocation} ->
+            NewParserState = case ParserState#state.doc_part of
+                unknown ->
+                    ParserState#state{doc_part=prolog};
+                _ ->
+                    erlang:error({badtag, ParserState#state.location})
+            end,
+            case proplists:get_value("encoding", Attrs) of
+                undefined ->
+                    parse_element(NewParserState#state{data=Tail,
+                        location=NewLocation});
+                Charset ->
+                    case encodings:get_encoder_decoder(Charset) of
+                        {ok, _, Decoder} ->
+                            parse_element(NewParserState#state{data=Tail,
+                                location=NewLocation, decoder=Decoder});
+                        {error, badarg} ->
+                            erlang:error({bad_encoding,
+                                ParserState#state.location})
+                    end
+            end;
         {{open_tag, Tag, Attrs}, Tail, NewLocation} ->
             NewParserState = update_state_if_root(ParserState),
             TagNamespaces = get_tag_namespaces(Attrs, Location, []),
@@ -194,15 +219,16 @@ parse_element(#state{behaviour=B, location=Location}=ParserState) ->
             parse_element(NewParserState#state{state=State, data=Tail,
                 location=NewLocation, stack=Stack, namespaces=Namespaces});
         {{open_close_tag, Tag, Attrs}, Tail, NewLocation} ->
+            NewParserState = update_state_if_root(ParserState),
             TagNamespaces = get_tag_namespaces(Attrs, Location, []),
             Namespaces = add_namespaces(
-                ParserState#state.namespaces, TagNamespaces),
+                NewParserState#state.namespaces, TagNamespaces),
             NewTag = apply_namespace_to_name(Tag, Namespaces, Location),
             NewAttrs = apply_namespaces_to_attrs(Attrs, Namespaces, Location),
             {ok, State} = B:start_element(NewTag, NewAttrs,
-                Location, ParserState#state.state),
+                Location, NewParserState#state.state),
             {ok, State2} = B:end_element(NewTag, Location, State),
-            parse_element(ParserState#state{state=State2,
+            parse_element(NewParserState#state{state=State2,
                 data=Tail, location=NewLocation});
         {{close_tag, Tag}, Tail, NewLocation} ->
             case ParserState#state.stack of
@@ -242,11 +268,11 @@ parse_element(#state{behaviour=B, location=Location}=ParserState) ->
 %%      NewParserState = record()
 %%
 update_state_if_root(#state{stack=[]}=ParserState) ->
-    if
-        ParserState#state.seen_root ->
+    case ParserState#state.doc_part of
+        element ->
             erlang:error({badtag, ParserState#state.location});
-        true ->
-            ParserState#state{seen_root=true}
+        _ ->
+            ParserState#state{doc_part=element}
     end;
 update_state_if_root(ParserState) ->
     ParserState.
@@ -410,6 +436,19 @@ apply_namespace_to_attr_name(Name, Namespaces, Location) ->
 parse_term(<<"<!--", Tail/binary>>, Location, _Decoder) ->
     {NewTail, NewLocation} = skip_over(Tail, <<"-->">>, ?inc_col(Location, 4)),
     {comment, NewTail, NewLocation};
+parse_term(<<"<?xml", Tail/binary>>, Location, Decoder) ->
+    {Attributes, Tail2, Location2} = parse_attributes(
+        Tail, ?inc_col(Location, 5), Decoder, []),
+    case skip_whitespace(Tail2, Location2) of
+        {<<"?>", Tail3/binary>>, Location3} ->
+            {{xml_decl, Attributes}, Tail3, ?inc_col(Location3, 2)};
+        {<<"?">>, _Location3} ->
+            throw(need_more_data);
+        {<<>>, _Location3} ->
+            throw(need_more_data);
+        {_, Location3} ->
+            erlang:error({badattr, Location3})
+    end;
 parse_term(<<"<?", Tail/binary>>, Location, _Decoder) ->
     {NewTail, NewLocation} = skip_over(Tail, <<"?>">>, ?inc_col(Location, 2)),
     {processing_instruction, NewTail, NewLocation};
@@ -438,9 +477,13 @@ parse_term(<<"<", Tail/binary>>, Location, Decoder) ->
             {{open_close_tag, Tag, Attributes}, Tail4, ?inc_col(Location4, 2)};
         {<<">", Tail4/binary>>, Location4} ->
             {{open_tag, Tag, Attributes}, Tail4, ?inc_col(Location4, 1)};
+        {<<>>, _Location4} ->
+            throw(need_more_data);
         {_, Location4} ->
             erlang:error({badattr, Location4})
     end;
+parse_term(<<>>, _Location, _Decoder) ->
+    throw(need_more_data);
 parse_term(Chunk, Location, Decoder) ->
     {Data, Tail, NewLocation} = parse_data(Chunk, Location, Decoder, [], false),
     {{characters, Data}, Tail, NewLocation}.
@@ -775,6 +818,8 @@ parse_eq(Chunk, Location) ->
     case skip_whitespace(Chunk, Location) of
         {<<"=", Tail/binary>>, Location2} ->
             skip_whitespace(Tail, ?inc_col(Location2, 1));
+        {<<>>, _Location2} ->
+            throw(need_more_data);
         _ ->
             erlang:error({badattr, Location})
     end.
