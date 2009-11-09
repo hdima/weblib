@@ -267,13 +267,10 @@ parse_element(#state{behaviour=B, location=Location}=ParserState) ->
 %%      ParserState = record()
 %%      NewParserState = record()
 %%
+update_state_if_root(#state{stack=[], doc_part=element, location=Location}) ->
+    erlang:error({badtag, Location});
 update_state_if_root(#state{stack=[]}=ParserState) ->
-    case ParserState#state.doc_part of
-        element ->
-            erlang:error({badtag, ParserState#state.location});
-        _ ->
-            ParserState#state{doc_part=element}
-    end;
+    ParserState#state{doc_part=element};
 update_state_if_root(ParserState) ->
     ParserState.
 
@@ -440,12 +437,10 @@ parse_term(<<"<?xml", Tail/binary>>, Location, Decoder) ->
     {Attributes, Tail2, Location2} = parse_attributes(
         Tail, ?inc_col(Location, 5), Decoder, []),
     case skip_whitespace(Tail2, Location2) of
-        {<<"?>", Tail3/binary>>, Location3} ->
-            {{xml_decl, Attributes}, Tail3, ?inc_col(Location3, 2)};
         {<<"?">>, _Location3} ->
             throw(need_more_data);
-        {<<>>, _Location3} ->
-            throw(need_more_data);
+        {<<"?>", Tail3/binary>>, Location3} ->
+            {{xml_decl, Attributes}, Tail3, ?inc_col(Location3, 2)};
         {_, Location3} ->
             erlang:error({badattr, Location3})
     end;
@@ -462,8 +457,6 @@ parse_term(<<"</", Tail/binary>>, Location, Decoder) ->
     case skip_whitespace(Tail2, Location2) of
         {<<">", Tail3/binary>>, Location3} ->
             {{close_tag, Tag}, Tail3, ?inc_col(Location3, 1)};
-        {<<>>, _Location3} ->
-            throw(need_more_data);
         {_, Location3} ->
             erlang:error({badtag, Location3})
     end;
@@ -473,12 +466,12 @@ parse_term(<<"<", Tail/binary>>, Location, Decoder) ->
     {Attributes, Tail3, Location3} = parse_attributes(
         Tail2, Location2, Decoder, []),
     case skip_whitespace(Tail3, Location3) of
+        {<<"/">>, _Location4} ->
+            throw(need_more_data);
         {<<"/>", Tail4/binary>>, Location4} ->
             {{open_close_tag, Tag, Attributes}, Tail4, ?inc_col(Location4, 2)};
         {<<">", Tail4/binary>>, Location4} ->
             {{open_tag, Tag, Attributes}, Tail4, ?inc_col(Location4, 1)};
-        {<<>>, _Location4} ->
-            throw(need_more_data);
         {_, Location4} ->
             erlang:error({badattr, Location4})
     end;
@@ -723,12 +716,17 @@ skip_over(Chunk, EndPattern, Size, Location) ->
 
 %%
 %% @doc Skip whitespace characters
+%% @throws need_more_data
 %% @spec skip_whitespace(Chunk, Location) -> Result
 %%      Chunk = binary()
 %%      Result = {Tail, NewLocation}
 %%      Tail = binary()
 %%      NewLocation = record()
 %%
+skip_whitespace(<<>>, _Location) ->
+    throw(need_more_data);
+skip_whitespace(<<"\r">>, _Location) ->
+    throw(need_more_data);
 skip_whitespace(<<"\r\n", Tail/binary>>, Location) ->
     skip_whitespace(Tail, ?inc_line(Location));
 skip_whitespace(<<"\n", Tail/binary>>, Location) ->
@@ -786,8 +784,6 @@ parse_name(Tail, Location, Decoder, Name) ->
 %%
 parse_attributes(Chunk, Location, Decoder, Attributes) ->
     case skip_whitespace(Chunk, Location) of
-        {<<>>, _Location2} ->
-            throw(need_more_data);
         {Chunk, Location2} ->
             {lists:reverse(Attributes), Chunk, Location2};
         {Tail, Location2} ->
@@ -818,8 +814,6 @@ parse_eq(Chunk, Location) ->
     case skip_whitespace(Chunk, Location) of
         {<<"=", Tail/binary>>, Location2} ->
             skip_whitespace(Tail, ?inc_col(Location2, 1));
-        {<<>>, _Location2} ->
-            throw(need_more_data);
         _ ->
             erlang:error({badattr, Location})
     end.
