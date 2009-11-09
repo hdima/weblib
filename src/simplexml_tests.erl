@@ -111,6 +111,14 @@ get_callbacks(List, N) ->
     end.
 
 
+get_chars([<<>>]) ->
+    [];
+get_chars([<<>>, <<C, Tail/binary>> | Chunks]) ->
+    [<<C>> | get_chars([Tail | Chunks])];
+get_chars([<<C, Tail/binary>> | Chunks]) ->
+    [<<C>> | get_chars([Tail | Chunks])].
+
+
 get_trace([Chunk | Chunks]) ->
     flush_possible_messages(),
     Server = self(),
@@ -282,7 +290,16 @@ continuation_test_() -> {setup, fun setup/0, fun cleanup/1, [
             {start_element, {"", "a", "a"}, [], _},
             {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_trace([<<"<a></a ">>, <<" >">>]))
+        get_trace([<<"<a></a ">>, <<" >">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"", "a", "a"}, [], _},
+            {characters, "\n", _},
+            {characters, "a", _},
+            {characters, "\n", _},
+            {characters, "\n", _},
+            {end_element, {"", "a", "a"}, _},
+            {end_document, _}],
+        get_trace(get_chars([<<"<a>\r\na\n\r</a>">>])))
     ]}.
 
 

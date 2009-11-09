@@ -631,6 +631,7 @@ parse_hex(_Tail, Location, _Acc) ->
 
 %%
 %% @doc Parse binary data
+%% @throws need_more_data
 %% @spec parse_binary_data(Chunk, Location, Acc) -> Result
 %%      Chunk = binary()
 %%      Location = record()
@@ -642,6 +643,8 @@ parse_hex(_Tail, Location, _Acc) ->
 %%
 parse_binary_data(<<>>, Location, Data) ->
     {Data, <<>>, Location};
+parse_binary_data(<<"\r">>, _Location, _Data) ->
+    throw(need_more_data);
 parse_binary_data(<<"<", _/binary>>=Tail, Location, Data) ->
     {Data, Tail, Location};
 parse_binary_data(<<"&", _/binary>>=Tail, Location, Data) ->
@@ -658,6 +661,7 @@ parse_binary_data(<<C, Tail/binary>>, Location, Data) ->
 
 %%
 %% @doc Parse CDATA characters
+%% @throws need_more_data
 %% @spec parse_cdata(Chunk, Location, Decoder, Acc) -> Result
 %%      Chunk = binary()
 %%      Location = record()
@@ -671,6 +675,8 @@ parse_binary_data(<<C, Tail/binary>>, Location, Data) ->
 parse_cdata(<<>>, Location, Decoder, Data) ->
     % Don't try to return all possible data at once
     {Decoder(Data), <<>>, Location};
+parse_cdata(<<"\r">>, _Location, _Decoder, _Data) ->
+    throw(need_more_data);
 parse_cdata(<<"]]>", Tail/binary>>, Location, Decoder, Data) ->
     {Decoder(Data), Tail, ?inc_col(Location, 3)};
 parse_cdata(<<"\r\n", Tail/binary>>, Location, Decoder, Data) ->
@@ -703,6 +709,8 @@ skip_over(Chunk, EndPattern, Size, Location) ->
     case Chunk of
         <<EndPattern:Size/binary, Tail/binary>> ->
             {Tail, ?inc_col(Location, Size)};
+        <<"\r">> ->
+            throw(need_more_data);
         <<"\r\n", Tail/binary>> ->
             skip_over(Tail, EndPattern, Size, ?inc_line(Location));
         <<"\n", Tail/binary>> ->
@@ -865,6 +873,8 @@ parse_attr_value(Data, Location, Decoder, Parts, Q, _) ->
 %%      NewLocation = record()
 %%
 parse_binary_value(<<>>, _Location, _Acc, _Quote) ->
+    throw(need_more_data);
+parse_binary_value(<<"\r">>, _Location, _Value, _Q) ->
     throw(need_more_data);
 parse_binary_value(<<Q, _/binary>>=Tail, Location, Value, Q) ->
     {Value, Tail, Location};
