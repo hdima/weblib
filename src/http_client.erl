@@ -75,16 +75,18 @@ behaviour_info(_Other) ->
 %% @doc Send HTTP request
 %% @spec http_request(Method, Url, Headers, Behaviour, Args) -> ok
 %%      Method = 'GET' | 'HEAD'
-%%      Url = string()
+%%      Url = string() | tuple()
 %%      Headers = [{Key, Value}]
 %%      Key = atom()
 %%      Value = binary()
 %%      Behaviour = module()
 %%      Args = term()
 %%
-http_request(Method, Url, Headers, Behaviour, Args) ->
+http_request(Method, Url, Headers, Behaviour, Args) when is_list(Url) ->
+    http_request(Method, url:urlsplit(Url), Headers, Behaviour, Args);
+http_request(Method, Url, Headers, Behaviour, Args) when is_tuple(Url) ->
     try
-        http_connect(url:urlsplit(Url), Headers, Method, Behaviour, Args),
+        http_connect(Url, Headers, Method, Behaviour, Args),
         ok
     catch
         throw:stop ->
