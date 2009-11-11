@@ -37,6 +37,8 @@
 %% </pre>
 %%
 -module(feedparser).
+-author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
+-vsn("0.1").
 
 %% Public interface
 -export([feed/3, feed/2]).

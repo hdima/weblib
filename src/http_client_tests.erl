@@ -28,6 +28,8 @@
 %% @doc Test for HTTP client
 %%
 -module(http_client_tests).
+-author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
+-vsn("0.1").
 
 -include_lib("eunit/include/eunit.hrl").
 

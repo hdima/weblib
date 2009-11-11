@@ -28,6 +28,9 @@
 %% @doc Auxiliary functions
 %%
 -module(weblib_app).
+-author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
+-vsn("0.1").
+
 -export([test/0, test/1, generate_docs/0]).
 
 
