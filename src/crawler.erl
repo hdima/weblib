@@ -46,8 +46,10 @@
 %%      Handler = function()
 %%      Args = list()
 %%
-crawl(Url, Handler, Args) ->
-    ok.
+crawl(Url, Handler, Args) when is_list(Url) ->
+    crawl(url:urlsplit(Url), Handler, Args);
+crawl(Url, Handler, Args) when is_tuple(Url) ->
+    gen_server:call(?MODULE, {crawl, Url, Handler, Args}).
 
 
 %%
@@ -76,9 +78,11 @@ stop() ->
 %%
 init([]) ->
     process_flag(trap_exit, true),
+    ets:new(?MODULE, [set, private, named_table]),
     {ok, none}.
 
 terminate(_Reason, _State) ->
+    ets:delete(?MODULE),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -99,5 +103,9 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
+handle_call({crawl, {_, Key, _, _}, Handler, Args}, _From, State) ->
+    % 1. If there is a queue for the Key place request in the queue
+    % 2. Or create queue and create handling process
+    {reply, ok, State};
 handle_call(_, _, State) ->
     {reply, badarg, State}.
