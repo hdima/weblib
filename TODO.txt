@@ -1,10 +1,6 @@
 General
 -------
 
-- Rename newslib to weblib
-
-- Rename newslib to newslib_app?
-
 
 XML parser
 ----------

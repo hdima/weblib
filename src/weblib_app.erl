@@ -27,7 +27,7 @@
 %%
 %% @doc Auxiliary functions
 %%
--module(newslib).
+-module(weblib_app).
 -export([test/0, test/1, generate_docs/0]).
 
 
@@ -38,11 +38,11 @@ test() ->
     test([]).
 
 test(Args) ->
-    eunit:test({application, newslib}, Args).
+    eunit:test({application, weblib}, Args).
 
 
 %%
 %% @doc Generate documentation for the library
 %%
 generate_docs() ->
-    edoc:application(newslib, "src", []).
+    edoc:application(weblib, "src", []).
