@@ -103,9 +103,17 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
-handle_call({crawl, {_, Key, _, _}, Handler, Args}, _From, State) ->
-    % 1. If there is a queue for the Key place request in the queue
-    % 2. Or create queue and create handling process
+handle_call({crawl, {_, Host, _, _}, Handler, Args}, _From, State) ->
+    try ets:lookup_element(?MODULE, Host, 2) of
+        Queue ->
+            NewQueue = queue:in({Handler, Args}, Queue),
+            ets:insert(?MODULE, {Host, NewQueue})
+    catch
+        error:badarg ->
+            Queue = queue:new(),
+            ets:insert(?MODULE, {Host, Queue})
+            % TODO: Create queue handling process
+    end,
     {reply, ok, State};
 handle_call(_, _, State) ->
     {reply, badarg, State}.
