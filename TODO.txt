@@ -5,6 +5,8 @@ General
 XML parser
 ----------
 
+- Need to handle errors and continuations from Decoder
+
 - Convert namespaces to existing atoms?
 
 - Add BOM handling
