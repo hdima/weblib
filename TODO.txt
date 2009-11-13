@@ -66,6 +66,8 @@ HTTP client
 Crawler
 -------
 
+- Change tables to set {Pid, Host} and bag {Host, Fun}
+
 - Tests
 
 - Store URLs in database

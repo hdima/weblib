@@ -35,7 +35,7 @@
 -export([crawl/2, crawl/3, crawl/4, start/0, start_link/0, stop/0]).
 
 %% Protected interface
--export([get_next_url/1]).
+-export([get_next_url/0]).
 
 %% Behaviour callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -84,8 +84,8 @@ crawl(Url, Module, Fun, Args) ->
 %%
 %% @doc Get next URL to crawl (only for internal subprocesses)
 %%
-get_next_url(Host) ->
-    gen_server:call(?MODULE, {get_next_url, Host}).
+get_next_url() ->
+    gen_server:call(?MODULE, get_next_url).
 
 
 %%
@@ -115,11 +115,13 @@ stop() ->
 init([]) ->
     process_flag(trap_exit, true),
     % Ignore duplicate values
-    ets:new(?MODULE, [bag, private, named_table]),
-    {ok, none}.
+    Handlers = ets:new(crawl_handlers, [set, private]),
+    Info = ets:new(crawl_info, [bag, private]),
+    {ok, {Handlers, Info}}.
 
-terminate(_Reason, _State) ->
-    ets:delete(?MODULE),
+terminate(_Reason, {Handlers, Info}) ->
+    ets:delete(Handlers),
+    ets:delete(Info),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -140,21 +142,21 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
-handle_call({crawl, {_, Host, _, _}, Handler, Args}, _From, State) ->
-    case ets:lookup(?MODULE, Host) of
-        [{_, Pid, _, _} | _] ->
-            ets:insert(?MODULE, {Host, Pid, Handler, Args});
+handle_call({crawl, {_, Host, _, _}, Fun}, _From, {Handlers, Info}=State) ->
+    case ets:lookup(Handlers, Host) of
+        [Pid | _] ->
+            ets:insert(Info, {Pid, Fun});
         [] ->
-            Proc = fun () -> handler(Host) end,
-            Pid = proc_lib:spawn_link(Proc),
-            ets:insert(?MODULE, {Host, Pid, Handler, Args})
+            Pid = proc_lib:spawn_link(fun handler/0),
+            ets:insert(Handlers, {Host, Pid}),
+            ets:insert(Info, {Pid, Fun})
     end,
     {reply, ok, State};
-handle_call({get_next_url, Host}, From, State) ->
-    Result = case ets:lookup(?MODULE, Host) of
-        [{Host, From, Handler, Args}=Info | _] ->
-            ets:delete_object(?MODULE, Info),
-            {Handler, Args};
+handle_call(get_next_url, From, {Handlers, Info}=State) ->
+    Result = case ets:lookup(Info, From) of
+        [{From, Fun}=I | _] ->
+            ets:delete_object(Info, I),
+            Fun;
         [] ->
             none;
         _ ->
@@ -162,22 +164,26 @@ handle_call({get_next_url, Host}, From, State) ->
             badarg
     end,
     {reply, Result, State};
-handle_call({'EXIT', From, normal}, From, _State) ->
+handle_call({'EXIT', From, normal}, From, State) ->
     ok;
-handle_call({'EXIT', From, _Reason}, From, _State) ->
-    % TODO: How we can restart this process - we don't know Host value?
+handle_call({'EXIT', From, _Reason}, From, {Handlers, Info}=State) ->
+    % TODO: Change tables to set {Pid, Host} and bag {Host, Fun}
+    %case ets:lookup(Info, From) of
+    %    [{From, Fun}=I | _] ->
+    %        ets:delete_object(Info, I),
+    %end,
     ok;
 handle_call(_, _, State) ->
     {reply, badarg, State}.
 
 
-handler(Host) ->
+handler() ->
     timer:sleep(?SLEEP_TIMEOUT),
-    case get_next_url(Host) of
-        {Handler, Args} ->
-            % TODO: Handle Handler return value
-            Handler(Args),
-            handler(Host);
+    case get_next_url() of
         empty ->
-            ok
+            ok;
+        Fun ->
+            % TODO: Handle Handler return value
+            Fun(),
+            handler()
     end.
