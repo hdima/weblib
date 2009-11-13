@@ -34,6 +34,9 @@
 %% Public interface
 -export([crawl/3, start/0, start_link/0, stop/0]).
 
+%% Protected interface
+-export([get_next_url/1]).
+
 %% Behaviour callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     terminate/2, code_change/3]).
@@ -50,6 +53,13 @@ crawl(Url, Handler, Args) when is_list(Url) ->
     crawl(url:urlsplit(Url), Handler, Args);
 crawl(Url, Handler, Args) when is_tuple(Url) ->
     gen_server:call(?MODULE, {crawl, Url, Handler, Args}).
+
+
+%%
+%% @doc Get next URL to crawl (only for internal subprocesses)
+%%
+get_next_url(Host) ->
+    gen_server:call(?MODULE, {get_next_url, Host}).
 
 
 %%
@@ -78,7 +88,8 @@ stop() ->
 %%
 init([]) ->
     process_flag(trap_exit, true),
-    ets:new(?MODULE, [set, private, named_table]),
+    % Ignore duplicate values
+    ets:new(?MODULE, [bag, private, named_table]),
     {ok, none}.
 
 terminate(_Reason, _State) ->
@@ -104,16 +115,26 @@ handle_info(_Info, State) ->
 
 
 handle_call({crawl, {_, Host, _, _}, Handler, Args}, _From, State) ->
-    try ets:lookup_element(?MODULE, Host, 2) of
-        Queue ->
-            NewQueue = queue:in({Handler, Args}, Queue),
-            ets:insert(?MODULE, {Host, NewQueue})
-    catch
-        error:badarg ->
-            Queue = queue:new(),
-            ets:insert(?MODULE, {Host, Queue})
-            % TODO: Create queue handling process
+    case ets:lookup(?MODULE, Host) of
+        [{_, Pid, _, _} | _] ->
+            ets:insert(?MODULE, {Host, Pid, Handler, Args});
+        [] ->
+            % TODO: Create handling process
+            Pid = self(),
+            ets:insert(?MODULE, {Host, Pid, Handler, Args})
     end,
     {reply, ok, State};
+handle_call({get_next_url, Host}, From, State) ->
+    Result = case ets:lookup(?MODULE, Host) of
+        [{Host, From, Handler, Args}=Info | _] ->
+            ets:delete_object(?MODULE, Info),
+            {Handler, Args};
+        [] ->
+            none;
+        _ ->
+            % Request from unknown process
+            badarg
+    end,
+    {reply, Result, State};
 handle_call(_, _, State) ->
     {reply, badarg, State}.
