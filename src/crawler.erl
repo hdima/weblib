@@ -115,13 +115,13 @@ stop() ->
 init([]) ->
     process_flag(trap_exit, true),
     % Ignore duplicate values
-    Handlers = ets:new(crawl_handlers, [set, private]),
-    Info = ets:new(crawl_info, [bag, private]),
-    {ok, {Handlers, Info}}.
+    Hosts = ets:new(crawl_hosts, [set, private]),
+    Funs = ets:new(crawl_funs, [bag, private]),
+    {ok, {Hosts, Funs}}.
 
-terminate(_Reason, {Handlers, Info}) ->
-    ets:delete(Handlers),
-    ets:delete(Info),
+terminate(_Reason, {Hosts, Funs}) ->
+    ets:delete(Hosts),
+    ets:delete(Funs),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -138,43 +138,50 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-
-handle_call({crawl, {_, Host, _, _}, Fun}, _From, {Handlers, Info}=State) ->
-    case ets:lookup(Handlers, Host) of
-        [Pid | _] ->
-            ets:insert(Info, {Pid, Fun});
+handle_call({crawl, {_, Host, _, _}, Fun}, _From, {Hosts, Funs}=State) ->
+    case ets:lookup(Funs, Host) of
+        [Fun | _] ->
+            ets:insert(Funs, {Host, Fun});
         [] ->
             Pid = proc_lib:spawn_link(fun handler/0),
-            ets:insert(Handlers, {Host, Pid}),
-            ets:insert(Info, {Pid, Fun})
+            ets:insert(Hosts, {Pid, Host}),
+            ets:insert(Funs, {Host, Fun})
     end,
     {reply, ok, State};
-handle_call(get_next_url, From, {Handlers, Info}=State) ->
-    Result = case ets:lookup(Info, From) of
-        [{From, Fun}=I | _] ->
-            ets:delete_object(Info, I),
-            Fun;
+handle_call(get_next_url, From, {Hosts, Funs}=State) ->
+    Result = case ets:lookup(Hosts, From) of
+        [{From, Host}] ->
+            case ets:lookup(Funs, Host) of
+                [{Host, Fun}=I | _] ->
+                    ets:delete_object(Funs, I),
+                    Fun;
+                [] ->
+                    empty
+            end;
         [] ->
-            none;
-        _ ->
             % Request from unknown process
             badarg
     end,
     {reply, Result, State};
-handle_call({'EXIT', From, normal}, From, State) ->
-    ok;
-handle_call({'EXIT', From, _Reason}, From, {Handlers, Info}=State) ->
-    % TODO: Change tables to set {Pid, Host} and bag {Host, Fun}
-    %case ets:lookup(Info, From) of
-    %    [{From, Fun}=I | _] ->
-    %        ets:delete_object(Info, I),
-    %end,
-    ok;
 handle_call(_, _, State) ->
     {reply, badarg, State}.
+
+
+handle_info({'EXIT', From, normal}, {Hosts, _}=State) ->
+    ets:delete(Hosts, From),
+    {noreply, State};
+handle_info({'EXIT', From, _Reason}, {Hosts, Funs}=State) ->
+    case ets:lookup(Funs, From) of
+        [{From, Host}] ->
+            % Restart handler
+            ets:delete(Hosts, From),
+            Pid = proc_lib:spawn_link(fun handler/0),
+            ets:insert(Hosts, {Pid, Host});
+        [] ->
+            {noreply, State}
+    end;
+handle_info(_Info, State) ->
+    {noreply, State}.
 
 
 handler() ->
@@ -183,7 +190,6 @@ handler() ->
         empty ->
             ok;
         Fun ->
-            % TODO: Handle Handler return value
             Fun(),
             handler()
     end.
