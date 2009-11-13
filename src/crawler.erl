@@ -140,6 +140,11 @@ handle_call({get_next_url, Host}, From, State) ->
             badarg
     end,
     {reply, Result, State};
+handle_call({'EXIT', From, normal}, From, State) ->
+    ok;
+handle_call({'EXIT', From, Reason}, From, State) ->
+    % TODO: How we can restart this process - we don't know Host value?
+    ok;
 handle_call(_, _, State) ->
     {reply, badarg, State}.
 
