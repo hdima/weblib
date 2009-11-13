@@ -32,7 +32,7 @@
 -vsn("0.1").
 
 %% Public interface
--export([crawl/3, start/0, start_link/0, stop/0]).
+-export([crawl/2, crawl/3, crawl/4, start/0, start_link/0, stop/0]).
 
 %% Protected interface
 -export([get_next_url/1]).
@@ -47,16 +47,38 @@
 
 
 %%
-%% @doc Crawl URL use handler
-%% @spec crawl(Url, Handler, Args) -> ok
+%% @doc Crawl URL with handler
+%% @spec crawl(Url, Fun) -> ok
 %%      Url = string()
-%%      Handler = function()
+%%      Fun = function()
+%%
+crawl(Url, Fun) when is_list(Url) ->
+    crawl(url:urlsplit(Url), Fun);
+crawl(Url, Fun) when is_tuple(Url) ->
+    gen_server:call(?MODULE, {crawl, Url, Fun}).
+
+
+%%
+%% @doc Crawl URL with handler
+%% @spec crawl(Url, Fun, Args) -> ok
+%%      Url = string()
+%%      Fun = function()
 %%      Args = list()
 %%
-crawl(Url, Handler, Args) when is_list(Url) ->
-    crawl(url:urlsplit(Url), Handler, Args);
-crawl(Url, Handler, Args) when is_tuple(Url) ->
-    gen_server:call(?MODULE, {crawl, Url, Handler, Args}).
+crawl(Url, Fun, Args) ->
+    crawl(Url, fun () -> Fun(Args) end).
+
+
+%%
+%% @doc Crawl URL with handler
+%% @spec crawl(Url, Module, Fun, Args) -> ok
+%%      Url = string()
+%%      Module = module()
+%%      Fun = function()
+%%      Args = list()
+%%
+crawl(Url, Module, Fun, Args) ->
+    crawl(Url, fun () -> Module:Fun(Args) end).
 
 
 %%
@@ -140,9 +162,9 @@ handle_call({get_next_url, Host}, From, State) ->
             badarg
     end,
     {reply, Result, State};
-handle_call({'EXIT', From, normal}, From, State) ->
+handle_call({'EXIT', From, normal}, From, _State) ->
     ok;
-handle_call({'EXIT', From, Reason}, From, State) ->
+handle_call({'EXIT', From, _Reason}, From, _State) ->
     % TODO: How we can restart this process - we don't know Host value?
     ok;
 handle_call(_, _, State) ->
