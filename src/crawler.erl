@@ -42,6 +42,10 @@
     terminate/2, code_change/3]).
 
 
+% TODO: Move to crawl/3 options
+-define(SLEEP_TIMEOUT, 3 * 60 * 1000).
+
+
 %%
 %% @doc Crawl URL use handler
 %% @spec crawl(Url, Handler, Args) -> ok
@@ -119,8 +123,8 @@ handle_call({crawl, {_, Host, _, _}, Handler, Args}, _From, State) ->
         [{_, Pid, _, _} | _] ->
             ets:insert(?MODULE, {Host, Pid, Handler, Args});
         [] ->
-            % TODO: Create handling process
-            Pid = self(),
+            Proc = fun () -> handler(Host) end,
+            Pid = proc_lib:spawn_link(Proc),
             ets:insert(?MODULE, {Host, Pid, Handler, Args})
     end,
     {reply, ok, State};
@@ -138,3 +142,15 @@ handle_call({get_next_url, Host}, From, State) ->
     {reply, Result, State};
 handle_call(_, _, State) ->
     {reply, badarg, State}.
+
+
+handler(Host) ->
+    timer:sleep(?SLEEP_TIMEOUT),
+    case get_next_url(Host) of
+        {Handler, Args} ->
+            % TODO: Handle Handler return value
+            Handler(Args),
+            handler(Host);
+        empty ->
+            ok
+    end.

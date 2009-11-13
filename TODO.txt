@@ -66,4 +66,6 @@ HTTP client
 Crawler
 -------
 
+- Tests
+
 - Store URLs in database
