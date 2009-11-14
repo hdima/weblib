@@ -66,6 +66,4 @@ HTTP client
 Crawler
 -------
 
-- Configure timeouts through Options argument to crawl()
-
 - Store URLs in database

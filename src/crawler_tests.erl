@@ -75,7 +75,7 @@ get_seconds() ->
 %%
 
 setup() ->
-    crawler:start().
+    crawler:start([{timeout, 1000}]).
 
 cleanup(_) ->
     crawler:stop().

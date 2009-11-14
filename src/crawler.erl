@@ -32,7 +32,8 @@
 -vsn("0.1").
 
 %% Public interface
--export([crawl/2, crawl/4, start/0, start_link/0, stop/0]).
+-export([crawl/2, crawl/4, start/0, start/1,
+    start_link/0, start_link/1, stop/0]).
 
 %% Protected interface
 -export([get_next_url/0]).
@@ -42,9 +43,9 @@
     terminate/2, code_change/3]).
 
 
-% TODO: Move to crawl/3 options
-%-define(SLEEP_TIMEOUT, 3 * 60 * 1000).
--define(SLEEP_TIMEOUT, 1000).
+-record(options, {
+    timeout=5000
+    }).
 
 
 %%
@@ -82,14 +83,25 @@ get_next_url() ->
 %% @doc Start crawler
 %%
 start() ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [], []).
+    start_(#options{}).
 
+start(Options) ->
+    start_(parse_options(Options, #options{})).
+
+start_(Options) ->
+    gen_server:start({local, ?MODULE}, ?MODULE, [Options], []).
 
 %%
 %% @doc Start crawler
 %%
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    start_link_(#options{}).
+
+start_link(Options) ->
+    start_link_(parse_options(Options, #options{})).
+
+start_link_(Options) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Options], []).
 
 
 %%
@@ -99,17 +111,25 @@ stop() ->
     gen_server:cast(?MODULE, stop).
 
 
+parse_options([], Options) ->
+    Options;
+parse_options([{timeout, Timeout} | Tail], Options) ->
+    parse_options(Tail, Options#options{timeout=Timeout});
+parse_options([Option | _], _) ->
+    erlang:error({badarg, Option}).
+
+
 %%
 %% @doc Initialise process
 %%
-init([]) ->
+init([Options]) ->
     process_flag(trap_exit, true),
     % Ignore duplicate values
     Hosts = ets:new(crawl_hosts, [set, private]),
     Funs = ets:new(crawl_funs, [bag, private]),
-    {ok, {Hosts, Funs}}.
+    {ok, {Options, Hosts, Funs}}.
 
-terminate(_Reason, {Hosts, Funs}) ->
+terminate(_Reason, {_, Hosts, Funs}) ->
     ets:delete(Hosts),
     ets:delete(Funs),
     ok.
@@ -128,17 +148,18 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_call({crawl, {_, Host, _, _}, Fun}, _From, {Hosts, Funs}=State) ->
+handle_call({crawl, {_, Host, _, _}, Fun}, _From, {Opts, Hosts, Funs}=State) ->
     case ets:member(Funs, Host) of
         false ->
-            Pid = proc_lib:spawn_link(fun handler/0),
+            Proc = fun () -> handler(Opts) end,
+            Pid = proc_lib:spawn_link(Proc),
             ets:insert(Hosts, {Pid, Host}),
             ets:insert(Funs, {Host, Fun});
         true ->
             ets:insert(Funs, {Host, Fun})
     end,
     {reply, ok, State};
-handle_call(get_next_url, {Pid, _}, {Hosts, Funs}=State) ->
+handle_call(get_next_url, {Pid, _}, {_, Hosts, Funs}=State) ->
     Result = case ets:lookup(Hosts, Pid) of
         [{Pid, Host}] ->
             case ets:lookup(Funs, Host) of
@@ -157,15 +178,16 @@ handle_call(_, _, State) ->
     {reply, badarg, State}.
 
 
-handle_info({'EXIT', Pid, normal}, {Hosts, _}=State) ->
+handle_info({'EXIT', Pid, normal}, {_, Hosts, _}=State) ->
     ets:delete(Hosts, Pid),
     {noreply, State};
-handle_info({'EXIT', Pid, _Reason}, {Hosts, _}=State) ->
+handle_info({'EXIT', Pid, _Reason}, {Opts, Hosts, _}=State) ->
     case ets:lookup(Hosts, Pid) of
         [{Pid, Host}] ->
             % Restart handler
             ets:delete(Hosts, Pid),
-            NewPid = proc_lib:spawn_link(fun handler/0),
+            Proc = fun () -> handler(Opts) end,
+            NewPid = proc_lib:spawn_link(Proc),
             ets:insert(Hosts, {NewPid, Host}),
             {noreply, State};
         [] ->
@@ -175,12 +197,12 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
-handler() ->
-    timer:sleep(?SLEEP_TIMEOUT),
+handler(Opts) ->
+    timer:sleep(Opts#options.timeout),
     case get_next_url() of
         empty ->
             ok;
         Fun ->
             Fun(),
-            handler()
+            handler(Opts)
     end.
