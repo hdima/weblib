@@ -1,6 +1,8 @@
 General
 -------
 
+- Add copyright and registered processes to .app file
+
 
 XML parser
 ----------
