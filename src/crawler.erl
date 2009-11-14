@@ -43,8 +43,10 @@
     terminate/2, code_change/3]).
 
 
--record(options, {
-    timeout=5000
+-record(state, {
+    timeout=5000,
+    hosts,
+    funs
     }).
 
 
@@ -83,10 +85,10 @@ get_next_url() ->
 %% @doc Start crawler
 %%
 start() ->
-    start_(#options{}).
+    start_(#state{}).
 
 start(Options) ->
-    start_(parse_options(Options, #options{})).
+    start_(parse_options(Options, #state{})).
 
 start_(Options) ->
     gen_server:start({local, ?MODULE}, ?MODULE, [Options], []).
@@ -95,10 +97,10 @@ start_(Options) ->
 %% @doc Start crawler
 %%
 start_link() ->
-    start_link_(#options{}).
+    start_link_(#state{}).
 
 start_link(Options) ->
-    start_link_(parse_options(Options, #options{})).
+    start_link_(parse_options(Options, #state{})).
 
 start_link_(Options) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Options], []).
@@ -114,7 +116,7 @@ stop() ->
 parse_options([], Options) ->
     Options;
 parse_options([{timeout, Timeout} | Tail], Options) ->
-    parse_options(Tail, Options#options{timeout=Timeout});
+    parse_options(Tail, Options#state{timeout=Timeout});
 parse_options([Option | _], _) ->
     erlang:error({badarg, Option}).
 
@@ -127,11 +129,11 @@ init([Options]) ->
     % Ignore duplicate values
     Hosts = ets:new(crawl_hosts, [set, private]),
     Funs = ets:new(crawl_funs, [bag, private]),
-    {ok, {Options, Hosts, Funs}}.
+    {ok, Options#state{hosts=Hosts, funs=Funs}}.
 
-terminate(_Reason, {_, Hosts, Funs}) ->
-    ets:delete(Hosts),
-    ets:delete(Funs),
+terminate(_Reason, State) ->
+    ets:delete(State#state.hosts),
+    ets:delete(State#state.funs),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -148,23 +150,23 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_call({crawl, {_, Host, _, _}, Fun}, _From, {Opts, Hosts, Funs}=State) ->
-    case ets:member(Funs, Host) of
+handle_call({crawl, {_, Host, _, _}, Fun}, _From, State) ->
+    case ets:member(State#state.funs, Host) of
         false ->
-            Proc = fun () -> handler(Opts) end,
+            Proc = fun () -> handler(State) end,
             Pid = proc_lib:spawn_link(Proc),
-            ets:insert(Hosts, {Pid, Host}),
-            ets:insert(Funs, {Host, Fun});
+            ets:insert(State#state.hosts, {Pid, Host}),
+            ets:insert(State#state.funs, {Host, Fun});
         true ->
-            ets:insert(Funs, {Host, Fun})
+            ets:insert(State#state.funs, {Host, Fun})
     end,
     {reply, ok, State};
-handle_call(get_next_url, {Pid, _}, {_, Hosts, Funs}=State) ->
-    Result = case ets:lookup(Hosts, Pid) of
+handle_call(get_next_url, {Pid, _}, State) ->
+    Result = case ets:lookup(State#state.hosts, Pid) of
         [{Pid, Host}] ->
-            case ets:lookup(Funs, Host) of
+            case ets:lookup(State#state.funs, Host) of
                 [{Host, Fun}=I | _] ->
-                    ets:delete_object(Funs, I),
+                    ets:delete_object(State#state.funs, I),
                     Fun;
                 [] ->
                     empty
@@ -178,17 +180,17 @@ handle_call(_, _, State) ->
     {reply, badarg, State}.
 
 
-handle_info({'EXIT', Pid, normal}, {_, Hosts, _}=State) ->
-    ets:delete(Hosts, Pid),
+handle_info({'EXIT', Pid, normal}, State) ->
+    ets:delete(State#state.hosts, Pid),
     {noreply, State};
-handle_info({'EXIT', Pid, _Reason}, {Opts, Hosts, _}=State) ->
-    case ets:lookup(Hosts, Pid) of
+handle_info({'EXIT', Pid, _Reason}, State) ->
+    case ets:lookup(State#state.hosts, Pid) of
         [{Pid, Host}] ->
             % Restart handler
-            ets:delete(Hosts, Pid),
-            Proc = fun () -> handler(Opts) end,
+            ets:delete(State#state.hosts, Pid),
+            Proc = fun () -> handler(State) end,
             NewPid = proc_lib:spawn_link(Proc),
-            ets:insert(Hosts, {NewPid, Host}),
+            ets:insert(State#state.hosts, {NewPid, Host}),
             {noreply, State};
         [] ->
             {noreply, State}
@@ -197,12 +199,12 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
-handler(Opts) ->
-    timer:sleep(Opts#options.timeout),
+handler(State) ->
+    timer:sleep(State#state.timeout),
     case get_next_url() of
         empty ->
             ok;
         Fun ->
             Fun(),
-            handler(Opts)
+            handler(State)
     end.
