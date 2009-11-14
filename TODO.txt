@@ -68,6 +68,4 @@ Crawler
 
 - Configure timeouts through Options argument to crawl()
 
-- Tests
-
 - Store URLs in database

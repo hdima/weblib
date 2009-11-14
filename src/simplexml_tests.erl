@@ -107,9 +107,6 @@ get_callbacks(List, N) ->
             error;
         Info ->
             get_callbacks([Info | List], N - 1)
-    after
-        500 ->
-            error
     end.
 
 

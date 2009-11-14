@@ -32,7 +32,7 @@
 -vsn("0.1").
 
 %% Public interface
--export([crawl/2, crawl/3, crawl/4, start/0, start_link/0, stop/0]).
+-export([crawl/2, crawl/4, start/0, start_link/0, stop/0]).
 
 %% Protected interface
 -export([get_next_url/0]).
@@ -43,7 +43,8 @@
 
 
 % TODO: Move to crawl/3 options
--define(SLEEP_TIMEOUT, 3 * 60 * 1000).
+%-define(SLEEP_TIMEOUT, 3 * 60 * 1000).
+-define(SLEEP_TIMEOUT, 1000).
 
 
 %%
@@ -60,25 +61,14 @@ crawl(Url, Fun) when is_tuple(Url) ->
 
 %%
 %% @doc Crawl URL with handler
-%% @spec crawl(Url, Fun, Args) -> ok
-%%      Url = string()
-%%      Fun = function()
-%%      Args = list()
-%%
-crawl(Url, Fun, Args) ->
-    crawl(Url, fun () -> Fun(Args) end).
-
-
-%%
-%% @doc Crawl URL with handler
 %% @spec crawl(Url, Module, Fun, Args) -> ok
 %%      Url = string()
-%%      Module = module()
-%%      Fun = function()
+%%      Module = atom()
+%%      Function = atom()
 %%      Args = list()
 %%
-crawl(Url, Module, Fun, Args) ->
-    crawl(Url, fun () -> Module:Fun(Args) end).
+crawl(Url, Module, Function, Args) ->
+    crawl(Url, fun () -> Module:Function(Args) end).
 
 
 %%
@@ -139,18 +129,18 @@ handle_cast(_Msg, State) ->
 
 
 handle_call({crawl, {_, Host, _, _}, Fun}, _From, {Hosts, Funs}=State) ->
-    case ets:lookup(Funs, Host) of
-        [Fun | _] ->
-            ets:insert(Funs, {Host, Fun});
-        [] ->
+    case ets:member(Funs, Host) of
+        false ->
             Pid = proc_lib:spawn_link(fun handler/0),
             ets:insert(Hosts, {Pid, Host}),
+            ets:insert(Funs, {Host, Fun});
+        true ->
             ets:insert(Funs, {Host, Fun})
     end,
     {reply, ok, State};
-handle_call(get_next_url, From, {Hosts, Funs}=State) ->
-    Result = case ets:lookup(Hosts, From) of
-        [{From, Host}] ->
+handle_call(get_next_url, {Pid, _}, {Hosts, Funs}=State) ->
+    Result = case ets:lookup(Hosts, Pid) of
+        [{Pid, Host}] ->
             case ets:lookup(Funs, Host) of
                 [{Host, Fun}=I | _] ->
                     ets:delete_object(Funs, I),
@@ -167,16 +157,17 @@ handle_call(_, _, State) ->
     {reply, badarg, State}.
 
 
-handle_info({'EXIT', From, normal}, {Hosts, _}=State) ->
-    ets:delete(Hosts, From),
+handle_info({'EXIT', Pid, normal}, {Hosts, _}=State) ->
+    ets:delete(Hosts, Pid),
     {noreply, State};
-handle_info({'EXIT', From, _Reason}, {Hosts, Funs}=State) ->
-    case ets:lookup(Funs, From) of
-        [{From, Host}] ->
+handle_info({'EXIT', Pid, _Reason}, {Hosts, _}=State) ->
+    case ets:lookup(Hosts, Pid) of
+        [{Pid, Host}] ->
             % Restart handler
-            ets:delete(Hosts, From),
-            Pid = proc_lib:spawn_link(fun handler/0),
-            ets:insert(Hosts, {Pid, Host});
+            ets:delete(Hosts, Pid),
+            NewPid = proc_lib:spawn_link(fun handler/0),
+            ets:insert(Hosts, {NewPid, Host}),
+            {noreply, State};
         [] ->
             {noreply, State}
     end;

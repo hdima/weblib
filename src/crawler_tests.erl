@@ -38,58 +38,68 @@
 %% Auxiliary functions
 %%
 
--spec start_test_server(atom(), list(), term(), binary()) -> no_return().
-
-start_test_server(Method, Headers, State, Response) ->
-    {ok, Listen} = gen_tcp:listen(0,
-        [binary, {ip, {127, 0, 0, 1}}, {active, false}, {packet, http_bin}]),
-    {ok, Port} = inet:port(Listen),
-    spawn(fun () -> start_test_client(Method, Port, Headers, State) end),
-    {ok, Socket} = gen_tcp:accept(Listen, 3000),
-    {ok, {http_request, Method, {abs_path, <<"/">>}, {1, 0}}}
-        = gen_tcp:recv(Socket, 0, 3000),
-    {ok, {http_header, _, 'Host', _, <<"localhost:",_/binary>>}}
-        = gen_tcp:recv(Socket, 0, 3000),
-    check_headers(Socket, Headers),
-    ok = inet:setopts(Socket, [{packet, raw}]),
-    ok = gen_tcp:send(Socket, Response),
-    ok = gen_tcp:close(Socket),
-    ok = gen_tcp:close(Listen).
-
-
-check_headers(Socket, []) ->
-    {ok, http_eoh} = gen_tcp:recv(Socket, 0, 3000);
-check_headers(Socket, [{Key, Value} | Headers]) ->
-    K = atom_to_binary(Key, latin1),
-    {ok, {http_header, _, K, _, Value}} = gen_tcp:recv(Socket, 0, 3000),
-    check_headers(Socket, Headers).
-
-
-start_test_client(Method, Port, Headers, {Server, _}=State) ->
-    http_client:http_request(Method,
-        "http://localhost:" ++ integer_to_list(Port), Headers, ?MODULE, State),
-    Server ! eof.
-
-
-get_trace(Method, Headers, State, Response) ->
-    Pid = self(),
-    spawn(fun () -> start_test_server(Method, Headers,
-        {Pid, State}, Response) end),
-    get_callbacks([]).
-
-
-get_callbacks(List) ->
+get_callbacks(List, 0) ->
+    lists:sort(List);
+get_callbacks(List, N) ->
     receive
-        eof ->
-            lists:reverse(List);
-        Info ->
-            get_callbacks([Info | List])
-    after
-        3000 ->
-            error
+        {Time, Url} ->
+            get_callbacks([{round(Time), Url} | List], N - 1)
     end.
+
+
+get_trace(List) ->
+    get_trace(List, 0).
+
+get_trace([], N) ->
+    get_callbacks([], N);
+get_trace([{Status, Url} | Tail], N) ->
+    Server = self(),
+    Now = get_seconds(),
+    Fun = case Status of
+        ok ->
+            fun () -> Server ! {get_seconds() - Now, Url} end;
+        fail ->
+            fun () -> Server ! {get_seconds() - Now, Url}, exit(error) end
+    end,
+    crawler:crawl(Url, Fun),
+    get_trace(Tail, N + 1).
+
+
+get_seconds() ->
+    {MS, S, MiS} = now(),
+    MS * 1000000 + S + MiS / 1000000.
 
 
 %%
 %% Tests
 %%
+
+setup() ->
+    crawler:start().
+
+cleanup(_) ->
+    crawler:stop().
+
+
+crawler_test_() -> {setup, fun setup/0, fun cleanup/1, [
+    ?_assertEqual([
+        {1, "http://site.com/1"},
+        {2, "http://site.com/2"}
+        ], get_trace([{ok, "http://site.com/1"}, {ok, "http://site.com/2"}])),
+    ?_assertEqual([
+        {1, "http://site1.com"},
+        {1, "http://site2.com"}
+        ], get_trace([{ok, "http://site1.com"}, {ok, "http://site2.com"}])),
+    ?_assertEqual([
+        {1, "http://site3.com"},
+        {1, "http://site4.com"},
+        {2, "http://site4.com"}
+        ], get_trace([{ok, "http://site3.com"}, {ok, "http://site4.com"},
+            {ok, "http://site4.com"}])),
+    ?_assertEqual([
+        {1, "http://site5.com"},
+        {1, "http://site6.com"},
+        {2, "http://site6.com"}
+        ], get_trace([{ok, "http://site5.com"}, {fail, "http://site6.com"},
+            {ok, "http://site6.com"}]))
+    ]}.

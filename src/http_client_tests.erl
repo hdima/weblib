@@ -113,9 +113,6 @@ get_callbacks(List) ->
             lists:reverse(List);
         Info ->
             get_callbacks([Info | List])
-    after
-        3000 ->
-            error
     end.
 
 
