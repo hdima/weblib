@@ -43,8 +43,6 @@ FeedParser
 HTTP client
 -----------
 
-- Configure timeouts through Options argument to http_connect()
-
 - Handle Transfer-Encoding headers (see also HTTP/1.1 support below). Also
   ignore Content-Length if Transfer-Encoding is present.
 

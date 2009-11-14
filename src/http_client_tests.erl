@@ -96,7 +96,8 @@ check_headers(Socket, [{Key, Value} | Headers]) ->
 
 start_test_client(Method, Port, Headers, {Server, _}=State) ->
     http_client:http_request(Method,
-        "http://localhost:" ++ integer_to_list(Port), Headers, ?MODULE, State),
+        "http://localhost:" ++ integer_to_list(Port),
+        Headers, ?MODULE, State, []),
     Server ! eof.
 
 
