@@ -67,3 +67,5 @@ Crawler
 -------
 
 - Store URLs in database
+
+- Add supervisor
