@@ -180,6 +180,8 @@ handle_call(_, _, State) ->
     {reply, badarg, State}.
 
 
+handle_info({'EXIT', _, shutdown}, State) ->
+    {stop, normal, State};
 handle_info({'EXIT', Pid, normal}, State) ->
     ets:delete(State#state.hosts, Pid),
     {noreply, State};
