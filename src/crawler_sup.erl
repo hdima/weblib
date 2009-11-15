@@ -25,17 +25,31 @@
 %% ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 %% POSSIBILITY OF SUCH DAMAGE.
 %%
-{application, weblib,
-    [{description, "Web library"},
-     {vsn, "0.2"},
-     {modules, [
-        http_client,
-        url,
-        simplexml,
-        feedparser,
-        crawler,
-        crawler_sup
-        ]},
-     {registered, [crawler]},
-     {applications, [kernel, stdlib]}
-     ]}.
+%% @doc Crawler supervisor
+%%
+-module(crawler_sup).
+-author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
+-vsn("0.1").
+
+-behaviour(supervisor).
+
+%% Public interface
+-export([start_link/1]).
+
+%% Behaviour callbacks
+-export([init/1]).
+
+
+start_link(Args) ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
+
+
+init([]) ->
+    {ok, {{one_for_one, 3, 10},
+        [{crawler,
+            {crawler, start_link, []},
+            permanent,
+            5000,
+            worker,
+            [crawler]}
+        ]}}.
