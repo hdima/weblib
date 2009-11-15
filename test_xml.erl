@@ -9,9 +9,11 @@
 
 
 parse_file(Filename) ->
+    encodings:start(),
     {ok, File} = file:open(Filename, [read, raw, binary]),
     {continue, ParseState} = simplexml:parse(<<>>, Filename, ?MODULE, none),
-    read_file(File, ParseState).
+    read_file(File, ParseState),
+    encodings:stop().
 
 
 read_file(File, ParseState) ->
@@ -49,5 +51,6 @@ end_element(Tag, Location, State) ->
 
 
 characters(Chunk, Location, State) ->
-    io:format("characters (~p): ~p~n", [Location, Chunk]),
+    io:format("characters (~p): ~ts~n",
+        [Location, encodings:encode(Chunk, utf8)]),
     {ok, State}.
