@@ -33,7 +33,7 @@
 %%      news_channel(ChannelInfo, Args) -> Result
 %%          ChannelInfo = #newsChannel
 %%          Args = term()
-%%          Result = {ok, State} | {stop, State}
+%%          Result = {ok, State}
 %% </pre>
 %%
 -module(feedparser).

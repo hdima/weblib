@@ -6,7 +6,7 @@
 %%
 %% @doc News channel information
 %%
--record(newsChannel, {
+-record(news_channel, {
     id,                 % Channel id
     title="",           % Channel title
     link,               % The URL to the website corresponding to the channel
