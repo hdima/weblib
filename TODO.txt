@@ -68,3 +68,5 @@ Crawler
 
 - Store URLs in database (we can store hosts in inverse form, like
   com.google.www
+
+- Pause creation of new subprocess after abnormal subprocess termination
