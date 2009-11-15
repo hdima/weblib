@@ -66,6 +66,7 @@ HTTP client
 Crawler
 -------
 
-- Store URLs in database
+- Store URLs in database (we can store hosts in inverse form, like
+  com.google.www
 
 - Add supervisor
