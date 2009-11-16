@@ -1,8 +1,6 @@
 General
 -------
 
-- Add copyright and registered processes to .app file
-
 
 XML parser
 ----------
@@ -30,14 +28,6 @@ XML parser
 
 FeedParser
 ----------
-
-- Remove spawn_monitor in favor of spawn_link
-
-- Define callback module interface
-
-- Tests
-
-- What about encodings other than Unicode encodings?
 
 
 HTTP client
