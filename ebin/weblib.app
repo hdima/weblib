@@ -37,5 +37,5 @@
         crawler_sup
         ]},
      {registered, [crawler]},
-     {applications, [kernel, stdlib]}
+     {applications, [kernel, stdlib, encodings]}
      ]}.
