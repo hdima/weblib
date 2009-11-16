@@ -41,12 +41,26 @@
 -vsn("0.1").
 
 %% Public interface
--export([feed/3, feed/2]).
+-export([parse/4, parse/2]).
 
 %% Behaviour information
 -export([behaviour_info/1]).
 
+-behaviour(simplexml).
+
+%% Behaviour callbacks
+-export([start_document/2, end_document/2,
+    start_element/4, end_element/3, characters/3]).
+
 -include("feedparser.hrl").
+
+%% Parser state
+-record(state, {
+    behaviour,
+    state,
+    stack=[],
+    module=unknown
+    }).
 
 
 %%
@@ -62,74 +76,72 @@ behaviour_info(_Other) ->
 
 
 %%
-%% @doc Start parsing process
-%% @spec feed(Chunk, Behaviour, Args) -> DocId
+%% @doc Start parse feed source
+%% @spec parse(Chunk, Source, Behaviour, State) -> Result
 %%      Chunk = binary()
-%%      Behaviour = atom()
-%%      Args = term()
-%%      DocId = term()
+%%      Source = string() | unknown
+%%      Behaviour = module()
+%%      State = term()
+%%      Result = {continue, ParserState} | {ok, NewState}
+%%      ParserState = term()
+%%      NewState = term()
 %%
-feed(Chunk, Behaviour, Args) when is_binary(Chunk) ->
-    Client = self(),
-    spawn_monitor(fun () -> parse(Client, Chunk, Behaviour, Args) end).
+parse(Chunk, Source, Behaviour, State) when is_binary(Chunk) ->
+    ParserState = #state{behaviour=Behaviour, state=State},
+    simplexml:parse(Chunk, Source, ?MODULE, ParserState).
 
 
 %%
-%% @doc Continue parsing process
-%% @spec feed(Chunk, DocId) -> Result
+%% @doc Continue parse feed source
+%% @spec parse(Chunk, ParserState) -> Result
 %%      Chunk = binary() | eof
-%%      DocId = term()
-%%      Result = ok | {fatal_error, Reason}
+%%      ParserState = term()
+%%      Result = {continue, ParserState} | {ok, State}
 %%      Reason = term()
 %%
-feed(eof, {Server, Monitor}) ->
-    Server ! {self(), <<>>},
-    receive
-        {Server, Result} ->
-            Result;
-        {'DOWN', Monitor, process, Server, Reason} ->
-            {fatal_error, Reason}
-    after
-        500 ->
-            {fatal_error, no_response}
-    end;
-feed(Chunk, {Server, Monitor}) when is_binary(Chunk) ->
-    Server ! {self(), Chunk},
-    receive
-        {'DOWN', Monitor, process, Server, Reason} ->
-            {fatal_error, Reason}
-    after
-        0 ->
-            ok
-    end.
+parse(Chunk, ParserState) ->
+    simplexml:parse(Chunk, ParserState).
 
 
-%%
-%% @doc Start parsing, now for real
-%%
-parse(Client, Chunk, Behaviour, Args) ->
-    Result = xmerl_sax_parser:stream(Chunk, [
-        {continuation_fun, fun next/1},
-        {continuation_state, Client},
-        {event_fun, fun handle_event/3},
-        {event_state, {Behaviour, Args}}
-    ]),
-    Client ! {self(), Result}.
+start_document(Location, State) ->
+    {ok, State}.
 
+end_document(Location, State) ->
+    {ok, State}.
 
-%%
-%% @doc Return new chunk of XML
-%%
-next(Client) ->
-    receive
-        {Client, Chunk} ->
-            {Chunk, Client}
-    end.
+start_element({"", "rss", QTag}=Tag, Attributes, Location, State) ->
+    NewState = case State#state.stack of
+        [] ->
+            % TODO: Call Behaviour:start_feed (or start_document). Or we need
+            % to call it at start_document?
+            % TODO: Pass #state to the submodule?
+            State#state{module=rss_feed, stack=[QTag]};
+        Other ->
+            Module = State#state.module,
+            {ok, State2} = Module:start_element(Tag, Attributes,
+                Location, State),
+            State2
+    end,
+    {ok, NewState};
+start_element({"http://www.w3.org/2005/Atom", "feed", Tag},
+        Attributes, Location, State) ->
+    % TODO: Call Behaviour:start_feed (or start_document). Or we need to
+    % call it at start_document?
+    NewState = case State#state.stack of
+        [] ->
+            State#state{module=atom_feed, stack=[Tag]};
+        Other ->
+            %% TODO: Pass element to the submodule
+            State
+    end,
+    {ok, NewState};
+start_element(_Tag, _Attributes, Location, #state{stack=[]}) ->
+    erlang:error({bad_feed, Location});
+start_element(Tag, Attributes, Location, State) ->
+    {ok, State}.
 
+end_element(Tag, Location, State) ->
+    {ok, State}.
 
-%%
-%% @doc Handle events
-%%
-handle_event(Event, _Location, {_Behaviour, _Args}=State) ->
-    io:format("~p~n", [Event]),
-    State.
+characters(Chunk, Location, State) ->
+    {ok, State}.

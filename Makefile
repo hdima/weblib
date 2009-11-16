@@ -34,7 +34,7 @@ SRC_DIRS=src $(wildcard deps/*/src)
 
 compile: behaviours $(BEAMS)
 
-behaviours: ebin/http_client.beam ebin/simplexml.beam
+behaviours: ebin/http_client.beam ebin/simplexml.beam ebin/feedparser.beam
 
 ebin/%.beam: src/%.erl $(INCLUDES)
 	erlc -v -Wall $(INCLUDE_DIRS) $(EBINS) -o ebin/ $<

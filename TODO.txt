@@ -31,6 +31,8 @@ XML parser
 FeedParser
 ----------
 
+- Maybe we need to store tags stack?
+
 
 HTTP client
 -----------
