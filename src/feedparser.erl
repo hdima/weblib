@@ -54,6 +54,8 @@
 
 -include("feedparser.hrl").
 
+%% TODO: Extract to the feedparser.hrl if this record will be used by
+%% submodules
 %% Parser state
 -record(state, {
     behaviour,
