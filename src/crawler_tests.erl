@@ -84,22 +84,11 @@ cleanup(_) ->
 crawler_test_() -> {setup, fun setup/0, fun cleanup/1, [
     ?_assertEqual([
         {1, "http://site.com/1"},
-        {2, "http://site.com/2"}
-        ], get_trace([{ok, "http://site.com/1"}, {ok, "http://site.com/2"}])),
-    ?_assertEqual([
-        {1, "http://site1.com"},
-        {1, "http://site2.com"}
-        ], get_trace([{ok, "http://site1.com"}, {ok, "http://site2.com"}])),
-    ?_assertEqual([
-        {1, "http://site3.com"},
-        {1, "http://site4.com"},
-        {2, "http://site4.com"}
-        ], get_trace([{ok, "http://site3.com"}, {ok, "http://site4.com"},
-            {ok, "http://site4.com"}])),
-    ?_assertEqual([
-        {1, "http://site5.com"},
-        {1, "http://site6.com"},
-        {2, "http://site6.com"}
-        ], get_trace([{ok, "http://site5.com"}, {fail, "http://site6.com"},
-            {ok, "http://site6.com"}]))
+        {1, "http://site2.com"},
+        {2, "http://site.com/2"},
+        {2, "http://site2.com/fail"},
+        {3, "http://site2.com"}
+        ], get_trace([{ok, "http://site.com/1"}, {ok, "http://site.com/2"},
+            {ok, "http://site2.com"}, {fail, "http://site2.com/fail"},
+            {ok, "http://site2.com"}]))
     ]}.
