@@ -121,18 +121,14 @@ behaviour_info(_Other) ->
 parse(Chunk, Source, Behaviour, State) when is_binary(Chunk) ->
     Location = #location{source=Source},
     {ok, NewState} = Behaviour:start_document(Location, State),
-    case encodings:get_encoder_decoder(utf8) of
-        {ok, _, Decoder} ->
-            ParserState = #state{data=Chunk, behaviour=Behaviour,
-                state=NewState, decoder=Decoder, location=Location},
-            case Chunk of
-                <<>> ->
-                    {continue, ParserState};
-                Chunk ->
-                    parse_document(ParserState)
-            end;
-        {error, badarg} ->
-            erlang:error({bad_encoding, Location})
+    Decoder = get_decoder(utf8, Location),
+    ParserState = #state{data=Chunk, behaviour=Behaviour,
+        state=NewState, decoder=Decoder, location=Location},
+    case Chunk of
+        <<>> ->
+            {continue, ParserState};
+        Chunk ->
+            parse_document(ParserState)
     end.
 
 
@@ -151,6 +147,31 @@ parse(eof, ParserState) ->
 parse(Chunk, ParserState) when is_binary(Chunk) ->
     Data = <<(ParserState#state.data)/binary, Chunk/binary>>,
     parse_document(ParserState#state{data=Data}).
+
+
+%%
+%% @doc Return decoder for Charset
+%% @spec get_decoder(Charset, Location) -> Decoder
+%%      Charset = string() | atom()
+%%      Location = record()
+%%      Decoder = function()
+%%
+get_decoder(Charset, Location) ->
+    case encodings:get_encoder_decoder(Charset) of
+        {ok, _, Decoder} ->
+            fun (String, Loc) ->
+                case Decoder(String) of
+                    {incomplete, _, _} ->
+                        throw(need_more_data);
+                    {error, Decoded, Rest} ->
+                        erlang:error({bad_data, Loc, Decoded, Rest});
+                    Unicode ->
+                        Unicode
+                end
+            end;
+        {error, badarg} ->
+            erlang:error({bad_encoding, Location})
+    end.
 
 
 %%
@@ -197,14 +218,9 @@ parse_element(#state{behaviour=B, location=Location}=ParserState) ->
                     parse_element(NewParserState#state{data=Tail,
                         location=NewLocation});
                 Charset ->
-                    case encodings:get_encoder_decoder(Charset) of
-                        {ok, _, Decoder} ->
-                            parse_element(NewParserState#state{data=Tail,
-                                location=NewLocation, decoder=Decoder});
-                        {error, badarg} ->
-                            erlang:error({bad_encoding,
-                                ParserState#state.location})
-                    end
+                    Decoder = get_decoder(Charset, ParserState#state.location),
+                    parse_element(NewParserState#state{data=Tail,
+                        location=NewLocation, decoder=Decoder})
             end;
         {{open_tag, Tag, Attrs}, Tail, NewLocation} ->
             NewParserState = update_state_if_root(ParserState),
@@ -504,7 +520,8 @@ parse_data(<<"&", Ref/binary>>, Location, Decoder, Parts, SeenStr) ->
     parse_data(Tail, NewLocation, Decoder, [String | Parts], SeenStr);
 parse_data(Data, Location, Decoder, Parts, _) ->
     {Binary, Tail, NewLocation} = parse_binary_data(Data, Location, <<>>),
-    parse_data(Tail, NewLocation, Decoder, [Decoder(Binary) | Parts], true).
+    parse_data(Tail, NewLocation, Decoder,
+        [Decoder(Binary, Location) | Parts], true).
 
 
 %%
@@ -674,11 +691,11 @@ parse_binary_data(<<C, Tail/binary>>, Location, Data) ->
 %%
 parse_cdata(<<>>, Location, Decoder, Data) ->
     % Don't try to return all possible data at once
-    {Decoder(Data), <<>>, Location};
+    {Decoder(Data, Location), <<>>, Location};
 parse_cdata(<<"\r">>, _Location, _Decoder, _Data) ->
     throw(need_more_data);
 parse_cdata(<<"]]>", Tail/binary>>, Location, Decoder, Data) ->
-    {Decoder(Data), Tail, ?inc_col(Location, 3)};
+    {Decoder(Data, Location), Tail, ?inc_col(Location, 3)};
 parse_cdata(<<"\r\n", Tail/binary>>, Location, Decoder, Data) ->
     parse_cdata(Tail, ?inc_line(Location), Decoder, <<Data/binary, "\n">>);
 parse_cdata(<<"\n", Tail/binary>>, Location, Decoder, Data) ->
@@ -772,7 +789,7 @@ parse_name(_Chunk, _Location, _Decoder, <<>>) ->
 parse_name(<<C, Tail/binary>>, Location, Decoder, Name) when ?is_namechar(C) ->
     parse_name(Tail, ?inc_col(Location, 1), Decoder, <<Name/binary, C>>);
 parse_name(Tail, Location, Decoder, Name) ->
-    {Decoder(Name), Tail, Location}.
+    {Decoder(Name, Location), Tail, Location}.
 
 
 %%
@@ -856,7 +873,7 @@ parse_attr_value(<<"&", Ref/binary>>, Location, Decoder, Parts, Q, SeenStr) ->
 parse_attr_value(Data, Location, Decoder, Parts, Q, _) ->
     {Binary, Tail, NewLocation} = parse_binary_value(Data, Location, <<>>, Q),
     parse_attr_value(Tail, NewLocation, Decoder,
-        [Decoder(Binary) | Parts], Q, true).
+        [Decoder(Binary, Location) | Parts], Q, true).
 
 
 %%
