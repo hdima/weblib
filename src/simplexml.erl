@@ -213,11 +213,11 @@ parse_element(#state{behaviour=B, location=Location}=ParserState) ->
                 _ ->
                     erlang:error({badtag, ParserState#state.location})
             end,
-            case proplists:get_value("encoding", Attrs) of
-                undefined ->
+            case lists:keyfind("encoding", 1, Attrs) of
+                false ->
                     parse_element(NewParserState#state{data=Tail,
                         location=NewLocation});
-                Charset ->
+                {_, Charset} ->
                     Decoder = get_decoder(Charset, ParserState#state.location),
                     parse_element(NewParserState#state{data=Tail,
                         location=NewLocation, decoder=Decoder})
