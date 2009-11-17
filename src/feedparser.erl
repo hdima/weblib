@@ -30,9 +30,18 @@
 %% Callbak module interface:
 %%
 %% <pre>
-%%      news_channel(ChannelInfo, Args) -> Result
-%%          ChannelInfo = #newsChannel
-%%          Args = term()
+%%      start_channel(ChannelInfo, State) -> Result
+%%          ChannelInfo = record()
+%%          State = term()
+%%          Result = {ok, State}
+%%
+%%      end_channel(State) -> Result
+%%          State = term()
+%%          Result = {ok, State}
+%%
+%%      news_item(NewsInfo, State) -> Result
+%%          NewsInfo = record()
+%%          State = term()
 %%          Result = {ok, State}
 %% </pre>
 %%
@@ -53,16 +62,7 @@
     start_element/4, end_element/3, characters/3]).
 
 -include("feedparser.hrl").
-
-%% TODO: Extract to the feedparser.hrl if this record will be used by
-%% submodules
-%% Parser state
--record(state, {
-    behaviour,
-    state,
-    stack=[],
-    module=unknown
-    }).
+-include("feedparser_priv.hrl").
 
 
 %%
@@ -72,7 +72,7 @@
 %%      Arity = integer()
 %%
 behaviour_info(callbacks) ->
-    [{news_channel, 2}];
+    [{start_channel, 2}, {end_channel, 1}, {news_item, 2}];
 behaviour_info(_Other) ->
     undefined.
 
@@ -105,45 +105,50 @@ parse(Chunk, ParserState) ->
     simplexml:parse(Chunk, ParserState).
 
 
-start_document(Location, State) ->
+start_document(_Location, State) ->
     {ok, State}.
 
-end_document(Location, State) ->
+
+end_document(_Location, State) ->
     {ok, State}.
+
 
 start_element({"", "rss", QTag}=Tag, Attributes, Location, State) ->
-    NewState = case State#state.stack of
+    State2 = case State#state.stack of
         [] ->
-            % TODO: Call Behaviour:start_feed (or start_document). Or we need
-            % to call it at start_document?
-            % TODO: Pass #state to the submodule?
             State#state{module=rss_feed, stack=[QTag]};
-        Other ->
-            Module = State#state.module,
-            {ok, State2} = Module:start_element(Tag, Attributes,
-                Location, State),
-            State2
+        Tags ->
+            State#state{stack=[QTag | Tags]}
     end,
-    {ok, NewState};
-start_element({"http://www.w3.org/2005/Atom", "feed", Tag},
+    Module = State2#state.module,
+    {ok, State3} = Module:start_element(Tag, Attributes, Location, State2),
+    {ok, State3};
+start_element({"http://www.w3.org/2005/Atom", "feed", QTag}=Tag,
         Attributes, Location, State) ->
-    % TODO: Call Behaviour:start_feed (or start_document). Or we need to
-    % call it at start_document?
-    NewState = case State#state.stack of
+    State2 = case State#state.stack of
         [] ->
-            State#state{module=atom_feed, stack=[Tag]};
-        Other ->
-            %% TODO: Pass element to the submodule
-            State
+            State#state{module=atom_feed, stack=[QTag]};
+        Tags ->
+            State#state{stack=[QTag | Tags]}
     end,
-    {ok, NewState};
+    Module = State2#state.module,
+    {ok, State3} = Module:start_element(Tag, Attributes, Location, State2),
+    {ok, State3};
 start_element(_Tag, _Attributes, Location, #state{stack=[]}) ->
-    erlang:error({bad_feed, Location});
+    erlang:error({unknown_feed, Location});
 start_element(Tag, Attributes, Location, State) ->
-    {ok, State}.
+    Module = State#state.module,
+    {ok, State2} = Module:start_element(Tag, Attributes, Location, State),
+    {ok, State2}.
+
 
 end_element(Tag, Location, State) ->
-    {ok, State}.
+    Module = State#state.module,
+    {ok, State2} = Module:end_element(Tag, Location, State),
+    {ok, State2#state{stack=tl(State2#state.stack)}}.
+
 
 characters(Chunk, Location, State) ->
-    {ok, State}.
+    Module = State#state.module,
+    {ok, State2} = Module:end_element(Chunk, Location, State),
+    {ok, State2}.
