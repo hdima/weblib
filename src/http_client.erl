@@ -98,7 +98,7 @@ parse_options([Option | _], _) ->
 %%      Opts = record()
 %%
 http_request(Method, Url, Headers, Behaviour, Args, Opts) when is_list(Url) ->
-    http_request(Method, url:urlsplit(Url), Headers, Behaviour, Args, Opts);
+    http_request(Method, urllib:urlsplit(Url), Headers, Behaviour, Args, Opts);
 http_request(Method, Url, Headers, Behaviour, Args, Opts) when is_tuple(Url) ->
     try
         O = parse_options(Opts, #state{}),

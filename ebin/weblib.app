@@ -30,7 +30,7 @@
      {vsn, "0.2"},
      {modules, [
         http_client,
-        url,
+        urllib,
         simplexml,
         feedparser,
         crawler,

@@ -27,7 +27,7 @@
 %%
 %% @doc URL handling library
 %%
--module(url).
+-module(urllib).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
 -vsn("0.3").
 

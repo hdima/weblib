@@ -57,7 +57,7 @@
 %%      Fun = function()
 %%
 crawl(Url, Fun) when is_list(Url) ->
-    crawl(url:urlsplit(Url), Fun);
+    crawl(urllib:urlsplit(Url), Fun);
 crawl(Url, Fun) when is_tuple(Url) ->
     gen_server:call(?MODULE, {crawl, Url, Fun}).
 

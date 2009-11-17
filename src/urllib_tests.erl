@@ -27,7 +27,7 @@
 %%
 %% @doc Tests for URL module
 %%
--module(url_tests).
+-module(urllib_tests).
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
 -vsn("0.1").
 
@@ -36,42 +36,42 @@
 
 urlsplit_http_test_() -> [
     ?_assertEqual({http, "host.domain", 80, "/"},
-        url:urlsplit("host.domain")),
+        urllib:urlsplit("host.domain")),
     ?_assertEqual({http, "host.domain", 80, "/folder"},
-        url:urlsplit("host.domain/folder")),
+        urllib:urlsplit("host.domain/folder")),
     ?_assertEqual({http, "host.domain", 80, "/"},
-        url:urlsplit("http://host.domain")),
+        urllib:urlsplit("http://host.domain")),
     ?_assertEqual({http, "host.domain", 80, "/"},
-        url:urlsplit("HTTP://host.domain")),
+        urllib:urlsplit("HTTP://host.domain")),
     ?_assertEqual({http, "host.domain", 80, "/folder"},
-        url:urlsplit("http://host.domain/folder")),
+        urllib:urlsplit("http://host.domain/folder")),
     ?_assertEqual({http, "host.domain", 8080, "/"},
-        url:urlsplit("host.domain:8080")),
+        urllib:urlsplit("host.domain:8080")),
     ?_assertEqual({http, "host.domain", 8080, "/folder"},
-        url:urlsplit("host.domain:8080/folder")),
+        urllib:urlsplit("host.domain:8080/folder")),
     ?_assertEqual({http, "host.domain", 8080, "/"},
-        url:urlsplit("http://host.domain:8080")),
+        urllib:urlsplit("http://host.domain:8080")),
     ?_assertEqual({http, "host.domain", 8080, "/folder"},
-        url:urlsplit("http://host.domain:8080/folder"))
+        urllib:urlsplit("http://host.domain:8080/folder"))
     ].
 
 
 urlsplit_https_test_() -> [
     ?_assertEqual({https, "host.domain", 443, "/"},
-        url:urlsplit("https://host.domain")),
+        urllib:urlsplit("https://host.domain")),
     ?_assertEqual({https, "host.domain", 443, "/folder"},
-        url:urlsplit("https://host.domain/folder")),
+        urllib:urlsplit("https://host.domain/folder")),
     ?_assertEqual({https, "host.domain", 443, "/folder"},
-        url:urlsplit("HTTPS://host.domain/folder")),
+        urllib:urlsplit("HTTPS://host.domain/folder")),
     ?_assertEqual({https, "host.domain", 4430, "/"},
-        url:urlsplit("https://host.domain:4430")),
+        urllib:urlsplit("https://host.domain:4430")),
     ?_assertEqual({https, "host.domain", 4430, "/folder"},
-        url:urlsplit("https://host.domain:4430/folder"))
+        urllib:urlsplit("https://host.domain:4430/folder"))
     ].
 
 
 urlsplit_errors_test_() -> [
-    ?_assertError(bad_url, url:urlsplit("")),
-    ?_assertError(bad_url_scheme, url:urlsplit("ftp://ftp.host/")),
-    ?_assertError(bad_url_port, url:urlsplit("http://web.host:port"))
+    ?_assertError(bad_url, urllib:urlsplit("")),
+    ?_assertError(bad_url_scheme, urllib:urlsplit("ftp://ftp.host/")),
+    ?_assertError(bad_url_port, urllib:urlsplit("http://web.host:port"))
     ].
