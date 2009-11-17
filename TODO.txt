@@ -61,4 +61,8 @@ Crawler
 - Store URLs in database (we can store hosts in inverse form, like
   com.google.www
 
-- Pause creation of new subprocess after abnormal subprocess termination
+- Add timeout for every crawl step and restart timed out process if needed
+
+- Add limit on concurrent processes
+
+- Pause creation of new subprocess after abnormal subprocess termination???
