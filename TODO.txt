@@ -29,7 +29,7 @@ XML parser
 FeedParser
 ----------
 
-- Maybe we need to store tags stack?
+- Store unknown tags as list?
 
 
 HTTP client
