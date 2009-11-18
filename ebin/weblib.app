@@ -33,6 +33,7 @@
         urllib,
         simplexml,
         feedparser,
+        rss_feed,
         crawler,
         crawler_sup
         ]},
