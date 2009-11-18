@@ -180,22 +180,21 @@ handle_call(_, _, State) ->
     {reply, badarg, State}.
 
 
-handle_info({'EXIT', _, shutdown}, State) ->
-    {stop, normal, State};
-handle_info({'EXIT', Pid, normal}, State) ->
-    ets:delete(State#state.hosts, Pid),
-    {noreply, State};
-handle_info({'EXIT', Pid, _Reason}, State) ->
+handle_info({'EXIT', Pid, Reason}, State) ->
     case ets:lookup(State#state.hosts, Pid) of
         [{Pid, Host}] ->
-            % Restart handler
             ets:delete(State#state.hosts, Pid),
-            Proc = fun () -> handler(State) end,
-            NewPid = proc_lib:spawn_link(Proc),
-            ets:insert(State#state.hosts, {NewPid, Host}),
-            {noreply, State};
+            case Reason of
+                normal ->
+                    {noreply, State};
+                _ ->
+                    Proc = fun () -> handler(State) end,
+                    NewPid = proc_lib:spawn_link(Proc),
+                    ets:insert(State#state.hosts, {NewPid, Host}),
+                    {noreply, State}
+            end;
         [] ->
-            {noreply, State}
+            {stop, normal, State}
     end;
 handle_info(_Info, State) ->
     {noreply, State}.
