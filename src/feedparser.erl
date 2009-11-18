@@ -109,18 +109,44 @@ parse(Chunk, ParserState) ->
     simplexml:parse(Chunk, ParserState).
 
 
+%%
+%% @doc Start document callback function
+%% @spec start_document(Location, State) -> Result
+%%      Location = record()
+%%      State = term()
+%%      Result = {ok, State}
+%%
 start_document(_Location, State) ->
     Behaviour = State#state.behaviour,
     {ok, UState} = Behaviour:start_channel(State#state.state),
     {ok, State#state{state=UState}}.
 
 
+%%
+%% @doc End document callback function
+%% @spec end_document(Location, State) -> Result
+%%      Location = record()
+%%      State = term()
+%%      Result = {ok, State}
+%%
 end_document(_Location, State) ->
     Behaviour = State#state.behaviour,
     {ok, UState} = Behaviour:end_channel(State#state.state),
     {ok, State#state{state=UState}}.
 
 
+%%
+%% @doc Start element callback function
+%% @spec start_element(Tag, Attributes, Location, State) -> Result
+%%      Tag = {Uri, LTag, QTag}
+%%      Uri = string()
+%%      LTag = string()
+%%      QTag = string()
+%%      Attributes = list()
+%%      Location = record()
+%%      State = term()
+%%      Result = {ok, State}
+%%
 start_element({"", "rss", QTag}=Tag, Attributes, Location, State) ->
     State2 = case State#state.stack of
         [] ->
@@ -150,13 +176,32 @@ start_element(Tag, Attributes, Location, State) ->
     {ok, State2}.
 
 
+%%
+%% @doc End element callback function
+%% @spec end_element(Tag, Location, State) -> Result
+%%      Tag = {Uri, LTag, QTag}
+%%      Uri = string()
+%%      LTag = string()
+%%      QTag = string()
+%%      Location = record()
+%%      State = term()
+%%      Result = {ok, State}
+%%
 end_element(Tag, Location, State) ->
     Module = State#state.module,
     {ok, State2} = Module:end_element(Tag, Location, State),
     {ok, State2#state{stack=tl(State2#state.stack)}}.
 
 
+%%
+%% @doc Character data callback function
+%% @spec characters(Chunk, Location, State) -> Result
+%%      Chunk = string()
+%%      Location = record()
+%%      State = term()
+%%      Result = {ok, State}
+%%
 characters(Chunk, Location, State) ->
     Module = State#state.module,
-    {ok, State2} = Module:end_element(Chunk, Location, State),
+    {ok, State2} = Module:characters(Chunk, Location, State),
     {ok, State2}.
