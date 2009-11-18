@@ -30,12 +30,16 @@
 %% Callbak module interface:
 %%
 %% <pre>
-%%      start_channel(ChannelInfo, State) -> Result
-%%          ChannelInfo = record()
+%%      start_channel(State) -> Result
 %%          State = term()
 %%          Result = {ok, State}
 %%
 %%      end_channel(State) -> Result
+%%          State = term()
+%%          Result = {ok, State}
+%%
+%%      channel_info(ChannelInfo, State) -> Result
+%%          ChannelInfo = record()
 %%          State = term()
 %%          Result = {ok, State}
 %%
@@ -106,11 +110,15 @@ parse(Chunk, ParserState) ->
 
 
 start_document(_Location, State) ->
-    {ok, State}.
+    Behaviour = State#state.behaviour,
+    {ok, UState} = Behaviour:start_channel(State#state.state),
+    {ok, State#state{state=UState}}.
 
 
 end_document(_Location, State) ->
-    {ok, State}.
+    Behaviour = State#state.behaviour,
+    {ok, UState} = Behaviour:end_channel(State#state.state),
+    {ok, State#state{state=UState}}.
 
 
 start_element({"", "rss", QTag}=Tag, Attributes, Location, State) ->
