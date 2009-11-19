@@ -132,7 +132,7 @@ start_document(_Location, State) ->
 end_document(_Location, State) ->
     Behaviour = State#state.behaviour,
     {ok, UState} = Behaviour:end_channel(State#state.state),
-    {ok, State#state{state=UState}}.
+    {ok, UState}.
 
 
 %%
@@ -170,10 +170,11 @@ start_element({"http://www.w3.org/2005/Atom", "feed", QTag}=Tag,
     {ok, State3};
 start_element(_Tag, _Attributes, Location, #state{stack=[]}) ->
     erlang:error({unknown_feed, Location});
-start_element(Tag, Attributes, Location, State) ->
+start_element({_, _, QTag}=Tag, Attributes, Location, State) ->
     Module = State#state.module,
-    {ok, State2} = Module:start_element(Tag, Attributes, Location, State),
-    {ok, State2}.
+    State2 = State#state{stack=[QTag | State#state.stack]},
+    {ok, State3} = Module:start_element(Tag, Attributes, Location, State2),
+    {ok, State3}.
 
 
 %%

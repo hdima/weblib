@@ -37,6 +37,7 @@
     state,
     stack=[],
     module=unknown,
-    data=(<<>>),
-    channel_info=#news_channel{}
+    data="",
+    channel_info=#channel_info{},
+    channel_part=unknown
     }).

@@ -51,7 +51,7 @@
 %%      Result = {ok, State}
 %%
 start_element(_Tag, _Attributes, _Location, State) ->
-    {ok, State#state{data=(<<>>)}}.
+    {ok, State#state{data=""}}.
 
 
 %%
@@ -65,19 +65,32 @@ start_element(_Tag, _Attributes, _Location, State) ->
 %%      State = term()
 %%      Result = {ok, State}
 %%
-end_element(_Tag, _Location, #state{stack=["rss", "channe" | Tag]}=State) ->
+end_element(_Tag, _Location, #state{stack=["channel", "rss"]}=State) ->
+    UState2 = case State#state.channel_part of
+        unknown ->
+            Behaviour = State#state.behaviour,
+            Info = State#state.channel_info,
+            {ok, UState} = Behaviour:channel_info(Info, State#state.state),
+            UState;
+        _ ->
+            % TODO: Need to check for news items
+            State#state.state
+    end,
+    {ok, State#state{state=UState2}};
+end_element(_Tag, _Location, #state{stack=[Tag | ["channel", "rss"]]}=State) ->
     Info = State#state.channel_info,
+    Data = lists:flatten(lists:reverse(State#state.data)),
     NewInfo = case Tag of
-        ["title"] ->
-            Info#news_channel{title=State#state.data};
-        ["link"] ->
-            Info#news_channel{link=State#state.data};
-        ["description"] ->
-            Info#news_channel{description=State#state.data};
-        ["language"] ->
-            Info#news_channel{language=State#state.data};
-        ["copyright"] ->
-            Info#news_channel{copyright=State#state.data};
+        "title" ->
+            Info#channel_info{title=Data};
+        "link" ->
+            Info#channel_info{link=Data, id=Data};
+        "description" ->
+            Info#channel_info{description=Data};
+        "language" ->
+            Info#channel_info{language=Data};
+        "copyright" ->
+            Info#channel_info{copyright=Data};
         _ ->
             Info
     end,
@@ -95,5 +108,5 @@ end_element(_Tag, _Location, State) ->
 %%      Result = {ok, State}
 %%
 characters(Chunk, _Location, State) ->
-    Data = <<(State#state.data)/binary,Chunk/binary>>,
+    Data = [Chunk | State#state.data],
     {ok, State#state{data=Data}}.

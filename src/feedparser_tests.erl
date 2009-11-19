@@ -113,3 +113,29 @@ get_trace([Chunk | Chunks], {ParserState, Server}) ->
 %%
 %% Tests
 %%
+
+setup() ->
+    encodings:start().
+
+cleanup(_) ->
+    encodings:stop().
+
+
+rss_test_() -> {setup, fun setup/0, fun cleanup/1, [
+    ?_assertMatch([start_channel,
+            {channel_info, #channel_info{
+                title="Title",
+                link="http://feed.com",
+                id="http://feed.com",
+                description="Description",
+                language="en",
+                copyright="Copyright"}},
+            end_channel],
+        get_trace([<<"<rss><channel>">>,
+            <<"<title>Title</title>">>,
+            <<"<link>http://feed.com</link>">>,
+            <<"<description>Descr">>, <<"iption</description>">>,
+            <<"<language>en</language>">>,
+            <<"<copyright>Copyright</copyright>">>,
+            <<"</channel></rss>">>]))
+    ]}.
