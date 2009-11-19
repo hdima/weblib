@@ -76,7 +76,7 @@
 %%      Arity = integer()
 %%
 behaviour_info(callbacks) ->
-    [{start_channel, 2}, {end_channel, 1}, {news_item, 2}];
+    [{start_channel, 1}, {end_channel, 1}, {channel_info, 2}, {news_item, 2}];
 behaviour_info(_Other) ->
     undefined.
 
