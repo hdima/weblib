@@ -388,7 +388,13 @@ reference_test_() -> {setup, fun setup/0, fun cleanup/1, [
                 [{{"", "name", "name"}, "<>&'\""}], _},
             {end_element, {"", "a", "a"}, _},
             {end_document, _}],
-        get_trace([<<"<a name='&lt;&gt;&amp;&apos;&quot;'/>">>]))
+        get_trace([<<"<a name='&lt;&gt;&amp;&apos;&quot;'/>">>])),
+    ?_assertMatch([{start_document, _},
+            {start_element, {"", "title", "title"}, [], _},
+            {characters, "Less: <em> &lt; </em>", _},
+            {end_element, {"", "title", "title"}, _},
+            {end_document, _}],
+        get_trace([<<"<title>Less: &lt;em> &amp;lt; &lt;/em></title>">>]))
     ]}.
 
 
