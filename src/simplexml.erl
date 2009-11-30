@@ -73,6 +73,8 @@
 -author("Dmitry Vasiliev <dima@hlabs.spb.ru>").
 -vsn("0.4").
 
+-compile(inline).
+
 %% Public interface
 -export([parse/4, parse/2]).
 
