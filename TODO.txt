@@ -1,6 +1,8 @@
 General
 -------
 
+- Check inline directive for simplexml module
+
 
 XML parser
 ----------
