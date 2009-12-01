@@ -44,7 +44,8 @@
     published,          % Publication date and time
     updated,            % The last time the content of the channel changed
     copyright,          % Channel copyrights
-    generator="",       % User agent used to generate news channel content
+    generator,          % User agent used to generate news channel content
+    editor,             % Channel editor
     authors=[],         % Authors of the news channel
     contributors=[],    % Contributors to the news channel
     webmaster           % Person responsible for technical issues

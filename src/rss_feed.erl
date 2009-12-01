@@ -91,6 +91,15 @@ end_element(_Tag, _Location, #state{stack=[Tag | ["channel", "rss"]]}=State) ->
             Info#channel_info{language=Data};
         "copyright" ->
             Info#channel_info{copyright=Data};
+        "webMaster" ->
+            Info#channel_info{webmaster=Data};
+        "generator" ->
+            Info#channel_info{generator=Data};
+        "managingEditor" ->
+            Info#channel_info{editor=Data};
+        "category" ->
+            Info#channel_info{categories=[Data
+                | Info#channel_info.categories]};
         _ ->
             Info
     end,

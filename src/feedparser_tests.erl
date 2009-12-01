@@ -129,7 +129,11 @@ rss_test_() -> {setup, fun setup/0, fun cleanup/1, [
                 id="http://feed.com",
                 description="Description",
                 language="en",
-                copyright="Copyright"}},
+                copyright="Copyright",
+                webmaster="master@web.com",
+                generator="Generator",
+                editor="editor@web.com",
+                categories=["cat2", "cat1"]}},
             end_channel],
         get_trace([<<"<rss><channel>">>,
             <<"<title>Title</title>">>,
@@ -137,5 +141,10 @@ rss_test_() -> {setup, fun setup/0, fun cleanup/1, [
             <<"<description>Descr">>, <<"iption</description>">>,
             <<"<language>en</language>">>,
             <<"<copyright>Copyright</copyright>">>,
+            <<"<webMaster>master@web.com</webMaster>">>,
+            <<"<generator>Generator</generator>">>,
+            <<"<managingEditor>editor@web.com</managingEditor>">>,
+            <<"<category>cat1</category>">>,
+            <<"<category>cat2</category>">>,
             <<"</channel></rss>">>]))
     ]}.
