@@ -40,13 +40,16 @@ ebin/%.beam: src/%.erl $(INCLUDES)
 	erlc -v -Wall $(INCLUDE_DIRS) $(EBINS) -o ebin/ $<
 
 test: compile
-	erl -noshell $(EBINS) -s weblib_app test -s init stop
+	erl -noshell $(EBINS)\
+		-eval 'eunit:test({application, weblib}, [])' -s init stop
 
 test-verbose: compile
-	erl -noshell $(EBINS) -s weblib_app test verbose -s init stop
+	erl -noshell $(EBINS)\
+		-eval 'eunit:test({application, weblib}, [verbose])' -s init stop
 
 doc: compile
-	erl -noshell $(EBINS) -s weblib_app generate_docs -s init stop
+	erl -noshell $(EBINS)\
+		-eval 'edoc:application(weblib, "src", [])' -s init stop
 
 check:
 	dialyzer $(INCLUDE_DIRS) --src -c $(SRC_DIRS)
