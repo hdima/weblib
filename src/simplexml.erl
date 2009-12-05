@@ -159,8 +159,8 @@ parse(Chunk, ParserState) when is_binary(Chunk) ->
 %%      Decoder = function()
 %%
 get_decoder(Charset, Location) ->
-    case encodings:get_encoder_decoder(Charset) of
-        {ok, _, Decoder} ->
+    case encodings:getdecoder(Charset) of
+        {ok, Decoder} ->
             fun (String, Loc) ->
                 case Decoder(String) of
                     {incomplete, _, _} ->
