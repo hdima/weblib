@@ -2,3 +2,6 @@ Erlang streamline Web library
 =============================
 
 *WARNING*: Pre-alpha version, work in progress
+
+Depends on Erlang character encodings library
+(git://github.com/hdima/encodings.git).
